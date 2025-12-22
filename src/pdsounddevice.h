@@ -3,6 +3,9 @@
 //
 // BarePD - Sound device that bridges libpd with Circle's audio
 // Supports PWM (3.5mm) and I2S (PCM5102A) audio outputs
+// Copyright (C) 2024 Daniel Górny <PlayableElectronics>
+//
+// Licensed under GPLv3
 //
 #ifndef _pdsounddevice_h
 #define _pdsounddevice_h

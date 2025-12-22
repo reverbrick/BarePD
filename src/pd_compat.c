@@ -2,9 +2,12 @@
  * pd_compat.c
  *
  * BarePD - Bare metal compatibility layer for libpd
+ * Copyright (C) 2024 Daniel Górny <PlayableElectronics>
  * 
  * This file provides stub implementations for functions that newlib
  * needs but aren't available in the bare-metal Circle environment.
+ *
+ * Licensed under GPLv3
  */
 
 #include <stddef.h>

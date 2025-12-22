@@ -2,6 +2,9 @@
 // pdsounddevice.cpp
 //
 // BarePD - Sound device implementations for PWM and I2S (PCM5102A) audio
+// Copyright (C) 2024 Daniel Górny <PlayableElectronics>
+//
+// Licensed under GPLv3
 //
 #include "pdsounddevice.h"
 #include <circle/logger.h>

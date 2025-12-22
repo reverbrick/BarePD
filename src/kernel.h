@@ -2,7 +2,10 @@
 // kernel.h
 //
 // BarePD - Bare metal Pure Data for Raspberry Pi
+// Copyright (C) 2024 Daniel Górny <PlayableElectronics>
+//
 // Based on Circle (https://github.com/rsta2/circle)
+// Licensed under GPLv3
 //
 #ifndef _kernel_h
 #define _kernel_h

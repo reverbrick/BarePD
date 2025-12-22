@@ -2,6 +2,9 @@
 // main.cpp
 //
 // BarePD - Bare metal Pure Data for Raspberry Pi
+// Copyright (C) 2024 Daniel Górny <PlayableElectronics>
+//
+// Licensed under GPLv3
 //
 #include "kernel.h"
 #include <circle/startup.h>
