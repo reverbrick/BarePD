@@ -97,7 +97,24 @@ void _exit(int status) {
     while(1) { }  /* Hang forever in bare metal */
 }
 
-/* Note: signal is provided by newlib */
+/* Override newlib's signal() with a simple stub
+ * The real signal() might use instructions not available in bare metal */
+#include <signal.h>
+
+typedef void (*sighandler_t)(int);
+
+sighandler_t signal(int signum, sighandler_t handler) {
+    (void)signum;
+    (void)handler;
+    return SIG_DFL;  /* Just return default, do nothing */
+}
+
+int sigaction(int signum, const void *act, void *oldact) {
+    (void)signum;
+    (void)act;
+    (void)oldact;
+    return 0;
+}
 
 /* Environment stubs */
 char *getenv(const char *name) {
@@ -235,14 +252,8 @@ int readlink(const char *path, char *buf, size_t bufsiz) {
 }
 int usleep(unsigned int usec) { (void)usec; return 0; }
 
-/* sigaction, setitimer, select - provide implementations */
-#include <signal.h>
+/* setitimer, select - provide implementations */
 #include <sys/select.h>
-
-int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
-    (void)signum; (void)act; (void)oldact;
-    return 0;
-}
 
 int setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
     (void)which; (void)new_value; (void)old_value;

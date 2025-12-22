@@ -290,6 +290,10 @@ TShutdownMode CKernel::Run (void)
 
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
+	
+	// Force flush to screen before potential crash
+	m_Timer.MsDelay(100);
+	
 	m_Logger.Write (FromKernel, LogDebug, "Setting up libpd hooks...");
 	
 	// Set up print hook to redirect pd output to logger
@@ -340,8 +344,13 @@ TShutdownMode CKernel::Run (void)
 	});
 
 	// Initialize libpd
-	m_Logger.Write (FromKernel, LogDebug, "Calling libpd_init()...");
-	if (libpd_init() != 0)
+	m_Logger.Write (FromKernel, LogNotice, "About to call libpd_init()...");
+	m_Timer.MsDelay(100);  // Flush output before potential crash
+	
+	int initResult = libpd_init();
+	
+	m_Logger.Write (FromKernel, LogNotice, "libpd_init() returned: %d", initResult);
+	if (initResult != 0)
 	{
 		m_Logger.Write (FromKernel, LogWarning, "libpd already initialized");
 	}
