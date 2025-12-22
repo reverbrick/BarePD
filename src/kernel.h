@@ -33,6 +33,10 @@
 #define DEFAULT_PATCH_NAME      "main.pd"
 #define MAX_PATCH_SIZE          (256 * 1024) // 256KB max patch size
 
+// Log file settings
+#define LOG_FILE_NAME           "barepd.log"
+#define LOG_BUFFER_SIZE         (64 * 1024)  // 64KB log buffer
+
 // Default audio settings
 #define DEFAULT_AUDIO_OUTPUT    AudioOutputPWM
 #define DEFAULT_SAMPLE_RATE_HZ  48000
@@ -64,6 +68,9 @@ private:
 
 	// Audio setup
 	boolean SetupAudio (void);
+	
+	// SD card logging
+	void WriteLogToSD (void);
 
 	// MIDI handlers
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength);

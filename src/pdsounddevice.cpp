@@ -102,17 +102,20 @@ unsigned CPdSoundPWM::GetChunk (u32 *pBuffer, unsigned nChunkSize)
 	
 	// Debug: log first few chunks and periodically
 	s_nPWMChunkCount++;
-	if (s_nPWMChunkCount <= 3 || (s_nPWMChunkCount % 1000) == 0)
+	if (s_nPWMChunkCount <= 5 || (s_nPWMChunkCount % 500) == 0)
 	{
 		float maxSample = 0.0f;
+		float sumSample = 0.0f;
 		for (unsigned i = 0; i < nProcessFrames * m_nOutChannels && i < 256; i++)
 		{
 			float absVal = m_pOutBuffer[i] > 0 ? m_pOutBuffer[i] : -m_pOutBuffer[i];
 			if (absVal > maxSample) maxSample = absVal;
+			sumSample += absVal;
 		}
-		CLogger::Get()->Write(FromPdSound, LogDebug, 
-			"PWM chunk #%u: size=%u frames=%u ticks=%u range=[%d,%d] maxSample=%.4f",
-			s_nPWMChunkCount, nChunkSize, nFrames, nTicks, nRangeMin, nRangeMax, (double)maxSample);
+		CLogger::Get()->Write(FromPdSound, LogNotice, 
+			"PWM #%u: sz=%u fr=%u tk=%u rng=[%d,%d] max=%.4f sum=%.2f",
+			s_nPWMChunkCount, nChunkSize, nFrames, nTicks, nRangeMin, nRangeMax, 
+			(double)maxSample, (double)sumSample);
 	}
 	
 	unsigned nSamplesOut = nProcessFrames * m_nOutChannels;

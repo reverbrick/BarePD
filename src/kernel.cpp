@@ -22,6 +22,22 @@ static const char FromKernel[] = "kernel";
 
 CKernel *CKernel::s_pThis = nullptr;
 
+// Simple log buffer for SD card logging
+static char s_LogBuffer[LOG_BUFFER_SIZE];
+static unsigned s_nLogOffset = 0;
+static bool s_bLogReady = false;
+
+static void LogToBuffer(const char *pSource, const char *pMessage)
+{
+	if (s_nLogOffset >= LOG_BUFFER_SIZE - 256)
+		return;  // Buffer full
+	
+	int n = snprintf(s_LogBuffer + s_nLogOffset, LOG_BUFFER_SIZE - s_nLogOffset,
+	                 "[%s] %s\n", pSource, pMessage);
+	if (n > 0)
+		s_nLogOffset += n;
+}
+
 CKernel::CKernel (void)
 :	m_Screen (m_Options.GetWidth (), m_Options.GetHeight ()),
 	m_Timer (&m_Interrupt),
@@ -96,6 +112,27 @@ boolean CKernel::Initialize (void)
 
 	return bOK;
 }
+
+void CKernel::WriteLogToSD (void)
+{
+	if (s_nLogOffset == 0)
+		return;
+	
+	unsigned hFile = m_FileSystem.FileCreate (LOG_FILE_NAME);
+	if (hFile != 0)
+	{
+		m_FileSystem.FileWrite (hFile, s_LogBuffer, s_nLogOffset);
+		m_FileSystem.FileClose (hFile);
+	}
+}
+
+// Helper macro to log to both logger and buffer
+#define LOG(level, fmt, ...) do { \
+	char _logbuf[256]; \
+	snprintf(_logbuf, sizeof(_logbuf), fmt, ##__VA_ARGS__); \
+	m_Logger.Write(FromKernel, level, "%s", _logbuf); \
+	LogToBuffer(FromKernel, _logbuf); \
+} while(0)
 
 void CKernel::ParseConfig (void)
 {
@@ -262,6 +299,13 @@ boolean CKernel::FindAndLoadPatch (void)
 
 TShutdownMode CKernel::Run (void)
 {
+	// Start logging to buffer
+	LogToBuffer(FromKernel, "========================================");
+	LogToBuffer(FromKernel, "  BarePD - Bare Metal Pure Data");
+	LogToBuffer(FromKernel, "  https://github.com/reverbrick/BarePD");
+	LogToBuffer(FromKernel, "========================================");
+	LogToBuffer(FromKernel, "Compile time: " __DATE__ " " __TIME__);
+	
 	m_Logger.Write (FromKernel, LogNotice, "");
 	m_Logger.Write (FromKernel, LogNotice, "========================================");
 	m_Logger.Write (FromKernel, LogNotice, "  BarePD - Bare Metal Pure Data");
@@ -275,16 +319,19 @@ TShutdownMode CKernel::Run (void)
 	if (pPartition == nullptr)
 	{
 		m_Logger.Write (FromKernel, LogError, "Partition not found");
+		LogToBuffer(FromKernel, "ERROR: Partition not found");
 		return ShutdownHalt;
 	}
 
 	if (!m_FileSystem.Mount (pPartition))
 	{
 		m_Logger.Write (FromKernel, LogError, "Cannot mount filesystem");
+		LogToBuffer(FromKernel, "ERROR: Cannot mount filesystem");
 		return ShutdownHalt;
 	}
 
 	m_Logger.Write (FromKernel, LogNotice, "SD card mounted successfully");
+	LogToBuffer(FromKernel, "SD card mounted successfully");
 
 	// Parse configuration
 	ParseConfig ();
@@ -343,48 +390,77 @@ TShutdownMode CKernel::Run (void)
 
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "About to call libpd_init()...");
+	LogToBuffer(FromKernel, "Calling libpd_init()...");
 	m_Timer.MsDelay(100);  // Flush output before potential crash
 	
 	int initResult = libpd_init();
 	
-	m_Logger.Write (FromKernel, LogNotice, "libpd_init() returned: %d", initResult);
+	{
+		char buf[64];
+		snprintf(buf, sizeof(buf), "libpd_init() returned: %d", initResult);
+		m_Logger.Write (FromKernel, LogNotice, "%s", buf);
+		LogToBuffer(FromKernel, buf);
+	}
 	if (initResult != 0)
 	{
 		m_Logger.Write (FromKernel, LogWarning, "libpd already initialized");
 	}
-	m_Logger.Write (FromKernel, LogDebug, "libpd_init() completed");
 
 	// Setup audio output
 	m_Logger.Write (FromKernel, LogDebug, "Setting up audio output...");
+	LogToBuffer(FromKernel, "Setting up audio output...");
 	if (!SetupAudio ())
 	{
 		m_Logger.Write (FromKernel, LogPanic, "Cannot initialize audio output");
+		LogToBuffer(FromKernel, "ERROR: Cannot initialize audio output");
+		WriteLogToSD();
 		return ShutdownHalt;
 	}
+	LogToBuffer(FromKernel, "Audio output initialized");
 
 	// Try to load a patch from SD card
 	if (!FindAndLoadPatch ())
 	{
 		m_Logger.Write (FromKernel, LogWarning, "Running without a patch - audio will be silent");
 		m_Logger.Write (FromKernel, LogWarning, "Place a 'main.pd' file on the SD card");
+		LogToBuffer(FromKernel, "WARNING: No patch loaded");
+	}
+	else
+	{
+		LogToBuffer(FromKernel, "Patch loaded successfully");
 	}
 
 	// Enable DSP
 	m_Logger.Write (FromKernel, LogNotice, "Enabling DSP...");
-	m_Logger.Write (FromKernel, LogDebug, "Sending DSP on message...");
+	LogToBuffer(FromKernel, "Enabling DSP...");
 	libpd_start_message(1);
 	libpd_add_float(1.0f);
 	libpd_finish_message("pd", "dsp");
-	m_Logger.Write (FromKernel, LogDebug, "DSP enabled successfully");
+	LogToBuffer(FromKernel, "DSP enabled");
 
 	m_Logger.Write (FromKernel, LogNotice, "Starting audio output...");
+	LogToBuffer(FromKernel, "Starting audio output...");
 	
 	// Start sound device
 	if (!m_pSoundDevice->Start ())
 	{
 		m_Logger.Write (FromKernel, LogPanic, "Cannot start audio device");
+		LogToBuffer(FromKernel, "ERROR: Cannot start audio device");
+		WriteLogToSD();
 		return ShutdownHalt;
 	}
+	LogToBuffer(FromKernel, "Audio device started");
+
+	{
+		char buf[128];
+		snprintf(buf, sizeof(buf), "BarePD running! Audio: %s", 
+		         CAudioOutputFactory::GetTypeName(m_AudioOutput));
+		LogToBuffer(FromKernel, buf);
+	}
+	
+	// Write startup log to SD card
+	WriteLogToSD();
+	m_Logger.Write (FromKernel, LogNotice, "Startup log written to %s", LOG_FILE_NAME);
 
 	m_Logger.Write (FromKernel, LogNotice, "");
 	m_Logger.Write (FromKernel, LogNotice, "BarePD is running!");
