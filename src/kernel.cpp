@@ -313,6 +313,31 @@ TShutdownMode CKernel::Run (void)
 		}
 	});
 
+	// Set up bang hook for [send] messages with bang
+	libpd_set_banghook ([](const char *recv) {
+		CLogger::Get()->Write("pd", LogDebug, "[bang] -> %s", recv);
+	});
+
+	// Set up float hook for [send] messages with floats
+	libpd_set_floathook ([](const char *recv, float x) {
+		CLogger::Get()->Write("pd", LogDebug, "[float] -> %s: %f", recv, (double)x);
+	});
+
+	// Set up symbol hook for [send] messages with symbols
+	libpd_set_symbolhook ([](const char *recv, const char *sym) {
+		CLogger::Get()->Write("pd", LogDebug, "[symbol] -> %s: %s", recv, sym);
+	});
+
+	// Set up MIDI hooks for monitoring
+	libpd_set_noteonhook ([](int ch, int pitch, int vel) {
+		CLogger::Get()->Write("pd-midi", LogDebug, "Note %s ch=%d note=%d vel=%d",
+		                      vel > 0 ? "ON" : "OFF", ch, pitch, vel);
+	});
+
+	libpd_set_controlchangehook ([](int ch, int cc, int val) {
+		CLogger::Get()->Write("pd-midi", LogDebug, "CC ch=%d cc=%d val=%d", ch, cc, val);
+	});
+
 	// Initialize libpd
 	if (libpd_init() != 0)
 	{
@@ -355,6 +380,7 @@ TShutdownMode CKernel::Run (void)
 	m_Logger.Write (FromKernel, LogNotice, "");
 
 	// Main loop
+	unsigned nLastStatusTime = 0;
 	for (unsigned nCount = 0; m_pSoundDevice->IsActive (); nCount++)
 	{
 		// Update USB devices (for MIDI and USB audio)
@@ -370,6 +396,16 @@ TShutdownMode CKernel::Run (void)
 				m_pMIDIDevice->RegisterPacketHandler (MIDIPacketHandler);
 				m_Logger.Write (FromKernel, LogNotice, "USB MIDI device connected");
 			}
+		}
+
+		// Periodic status update (every 10 seconds)
+		unsigned nCurrentTime = m_Timer.GetUptime ();
+		if (nCurrentTime - nLastStatusTime >= 10)
+		{
+			nLastStatusTime = nCurrentTime;
+			m_Logger.Write (FromKernel, LogDebug, "Status: uptime=%us MIDI=%s",
+			                nCurrentTime,
+			                m_pMIDIDevice ? "connected" : "none");
 		}
 
 		m_Scheduler.Yield ();
