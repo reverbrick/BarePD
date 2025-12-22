@@ -290,6 +290,7 @@ TShutdownMode CKernel::Run (void)
 
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
+	m_Logger.Write (FromKernel, LogDebug, "Setting up libpd hooks...");
 	
 	// Set up print hook to redirect pd output to logger
 	libpd_set_printhook ([](const char *s) {
@@ -339,12 +340,15 @@ TShutdownMode CKernel::Run (void)
 	});
 
 	// Initialize libpd
+	m_Logger.Write (FromKernel, LogDebug, "Calling libpd_init()...");
 	if (libpd_init() != 0)
 	{
 		m_Logger.Write (FromKernel, LogWarning, "libpd already initialized");
 	}
+	m_Logger.Write (FromKernel, LogDebug, "libpd_init() completed");
 
 	// Setup audio output
+	m_Logger.Write (FromKernel, LogDebug, "Setting up audio output...");
 	if (!SetupAudio ())
 	{
 		m_Logger.Write (FromKernel, LogPanic, "Cannot initialize audio output");
@@ -360,9 +364,11 @@ TShutdownMode CKernel::Run (void)
 
 	// Enable DSP
 	m_Logger.Write (FromKernel, LogNotice, "Enabling DSP...");
+	m_Logger.Write (FromKernel, LogDebug, "Sending DSP on message...");
 	libpd_start_message(1);
 	libpd_add_float(1.0f);
 	libpd_finish_message("pd", "dsp");
+	m_Logger.Write (FromKernel, LogDebug, "DSP enabled successfully");
 
 	m_Logger.Write (FromKernel, LogNotice, "Starting audio output...");
 	
