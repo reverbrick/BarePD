@@ -1,0 +1,108 @@
+name: Build BarePD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-rpi3b:
+    name: Build for Raspberry Pi 3B/3B+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Download ARM GNU Toolchain
+      run: |
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+        tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+        echo "$PWD/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+    
+    - name: Configure Circle for RPi 3B
+      working-directory: circle
+      run: |
+        cat > Config.mk << EOF
+        PREFIX = arm-none-eabi-
+        AARCH = 32
+        RASPPI = 3
+        STDLIB_SUPPORT = 3
+        EOF
+        cat Config.mk
+    
+    - name: Build Circle libraries
+      working-directory: circle
+      run: |
+        ./makeall
+        cd addon/SDCard && make
+    
+    - name: Build BarePD kernel
+      working-directory: src
+      run: make
+    
+    - name: Show build result
+      run: |
+        ls -la src/kernel8-32.img
+        file src/kernel8-32.img
+    
+    - name: Upload kernel artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: barepd-rpi3b-kernel
+        path: src/kernel8-32.img
+        retention-days: 30
+
+  build-zerow:
+    name: Build for Raspberry Pi Zero W
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Download ARM GNU Toolchain
+      run: |
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+        tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+        echo "$PWD/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+    
+    - name: Configure Circle for RPi Zero W
+      working-directory: circle
+      run: |
+        cat > Config.mk << EOF
+        PREFIX = arm-none-eabi-
+        AARCH = 32
+        RASPPI = 1
+        STDLIB_SUPPORT = 3
+        EOF
+        cat Config.mk
+    
+    - name: Build Circle libraries
+      working-directory: circle
+      run: |
+        ./makeall
+        cd addon/SDCard && make
+    
+    - name: Build BarePD kernel
+      working-directory: src
+      run: make
+    
+    - name: Show build result
+      run: |
+        ls -la src/kernel.img
+        file src/kernel.img
+    
+    - name: Upload kernel artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: barepd-zerow-kernel
+        path: src/kernel.img
+        retention-days: 30
+
