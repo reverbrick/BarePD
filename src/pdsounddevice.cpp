@@ -17,52 +17,8 @@ extern "C" {
 
 static const char FromPdSound[] = "pdsound";
 
-//
-// Helper function to process libpd audio
-//
-static void ProcessPdAudio (float *pInBuffer, float *pOutBuffer,
-                            s16 *pHWBuffer, unsigned nChunkSize,
-                            unsigned nInChannels, unsigned nOutChannels)
-{
-	unsigned nFrames = nChunkSize / nOutChannels;
-	
-	// Calculate number of pd ticks needed (libpd processes 64 frames per tick)
-	unsigned nBlockSize = libpd_blocksize();
-	unsigned nTicks = nFrames / nBlockSize;
-	if (nTicks == 0) nTicks = 1;
-	
-	unsigned nProcessFrames = nTicks * nBlockSize;
-	
-	// Clear input buffer
-	if (pInBuffer && nInChannels > 0)
-	{
-		memset(pInBuffer, 0, nProcessFrames * nInChannels * sizeof(float));
-	}
-	
-	// Process audio through libpd
-	libpd_process_float(nTicks, pInBuffer, pOutBuffer);
-	
-	// Convert float output to s16
-	const float scale = 32767.0f;
-	unsigned nSamplesOut = nProcessFrames * nOutChannels;
-	
-	for (unsigned i = 0; i < nSamplesOut && i < nChunkSize; i++)
-	{
-		float sample = pOutBuffer[i];
-		
-		// Soft clip
-		if (sample > 1.0f) sample = 1.0f;
-		if (sample < -1.0f) sample = -1.0f;
-		
-		pHWBuffer[i] = (s16)(sample * scale);
-	}
-	
-	// Fill remainder with silence
-	for (unsigned i = nSamplesOut; i < nChunkSize; i++)
-	{
-		pHWBuffer[i] = 0;
-	}
-}
+// Note: Each sound device has its own GetChunk implementation
+// PWM and I2S use u32 buffers with device-specific range conversion
 
 // ============================================================================
 // PWM Sound Device Implementation
@@ -114,10 +70,54 @@ boolean CPdSoundPWM::Initialize (void)
 	return TRUE;
 }
 
-unsigned CPdSoundPWM::GetChunk (s16 *pBuffer, unsigned nChunkSize)
+unsigned CPdSoundPWM::GetChunk (u32 *pBuffer, unsigned nChunkSize)
 {
-	ProcessPdAudio(m_pInBuffer, m_pOutBuffer, pBuffer, nChunkSize,
-	               m_nInChannels, m_nOutChannels);
+	// PWM uses 32-bit samples where only the upper bits matter
+	// We need to convert float to u32 in the PWM range
+	unsigned nFrames = nChunkSize / 2;  // stereo
+	
+	// Calculate number of pd ticks needed
+	unsigned nBlockSize = libpd_blocksize();
+	unsigned nTicks = nFrames / nBlockSize;
+	if (nTicks == 0) nTicks = 1;
+	
+	unsigned nProcessFrames = nTicks * nBlockSize;
+	
+	// Clear input buffer
+	if (m_pInBuffer && m_nInChannels > 0)
+	{
+		memset(m_pInBuffer, 0, nProcessFrames * m_nInChannels * sizeof(float));
+	}
+	
+	// Process audio through libpd
+	libpd_process_float(nTicks, m_pInBuffer, m_pOutBuffer);
+	
+	// Convert to u32 for PWM (range is GetRangeMin() to GetRangeMax())
+	int nRangeMin = GetRangeMin();
+	int nRangeMax = GetRangeMax();
+	int nRange = nRangeMax - nRangeMin;
+	int nMid = (nRangeMin + nRangeMax) / 2;
+	
+	unsigned nSamplesOut = nProcessFrames * m_nOutChannels;
+	
+	for (unsigned i = 0; i < nSamplesOut && i < nChunkSize; i++)
+	{
+		float sample = m_pOutBuffer[i];
+		
+		// Soft clip
+		if (sample > 1.0f) sample = 1.0f;
+		if (sample < -1.0f) sample = -1.0f;
+		
+		// Convert to PWM range
+		pBuffer[i] = (u32)(nMid + (int)(sample * (nRange / 2)));
+	}
+	
+	// Fill remainder with silence (mid value)
+	for (unsigned i = nSamplesOut; i < nChunkSize; i++)
+	{
+		pBuffer[i] = (u32)nMid;
+	}
+	
 	return nChunkSize;
 }
 
@@ -172,10 +172,54 @@ boolean CPdSoundI2S::Initialize (void)
 	return TRUE;
 }
 
-unsigned CPdSoundI2S::GetChunk (s16 *pBuffer, unsigned nChunkSize)
+unsigned CPdSoundI2S::GetChunk (u32 *pBuffer, unsigned nChunkSize)
 {
-	ProcessPdAudio(m_pInBuffer, m_pOutBuffer, pBuffer, nChunkSize,
-	               m_nInChannels, m_nOutChannels);
+	// I2S uses 32-bit samples, but we use the full signed range
+	unsigned nFrames = nChunkSize / 2;  // stereo
+	
+	// Calculate number of pd ticks needed
+	unsigned nBlockSize = libpd_blocksize();
+	unsigned nTicks = nFrames / nBlockSize;
+	if (nTicks == 0) nTicks = 1;
+	
+	unsigned nProcessFrames = nTicks * nBlockSize;
+	
+	// Clear input buffer
+	if (m_pInBuffer && m_nInChannels > 0)
+	{
+		memset(m_pInBuffer, 0, nProcessFrames * m_nInChannels * sizeof(float));
+	}
+	
+	// Process audio through libpd
+	libpd_process_float(nTicks, m_pInBuffer, m_pOutBuffer);
+	
+	// Convert to u32 for I2S (signed 32-bit audio)
+	// I2S expects signed values, so we use GetRangeMin/Max
+	int nRangeMin = GetRangeMin();
+	int nRangeMax = GetRangeMax();
+	int nRange = nRangeMax - nRangeMin;
+	int nMid = (nRangeMin + nRangeMax) / 2;
+	
+	unsigned nSamplesOut = nProcessFrames * m_nOutChannels;
+	
+	for (unsigned i = 0; i < nSamplesOut && i < nChunkSize; i++)
+	{
+		float sample = m_pOutBuffer[i];
+		
+		// Soft clip
+		if (sample > 1.0f) sample = 1.0f;
+		if (sample < -1.0f) sample = -1.0f;
+		
+		// Convert to I2S range (signed 32-bit)
+		pBuffer[i] = (u32)(nMid + (int)(sample * (nRange / 2)));
+	}
+	
+	// Fill remainder with silence (mid value)
+	for (unsigned i = nSamplesOut; i < nChunkSize; i++)
+	{
+		pBuffer[i] = (u32)nMid;
+	}
+	
 	return nChunkSize;
 }
 

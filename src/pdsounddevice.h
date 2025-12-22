@@ -47,7 +47,8 @@ public:
 	unsigned GetOutputChannels (void) const { return m_nOutChannels; }
 
 protected:
-	unsigned GetChunk (s16 *pBuffer, unsigned nChunkSize) override;
+	// PWM uses 32-bit samples (u32), not 16-bit
+	unsigned GetChunk (u32 *pBuffer, unsigned nChunkSize) override;
 
 private:
 	float *m_pInBuffer;
@@ -79,7 +80,8 @@ public:
 	unsigned GetOutputChannels (void) const { return m_nOutChannels; }
 
 protected:
-	unsigned GetChunk (s16 *pBuffer, unsigned nChunkSize) override;
+	// I2S uses 32-bit samples (u32)
+	unsigned GetChunk (u32 *pBuffer, unsigned nChunkSize) override;
 
 private:
 	float *m_pInBuffer;
