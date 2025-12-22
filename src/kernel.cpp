@@ -261,7 +261,7 @@ TShutdownMode CKernel::Run (void)
 	m_Logger.Write (FromKernel, LogNotice, "");
 	m_Logger.Write (FromKernel, LogNotice, "========================================");
 	m_Logger.Write (FromKernel, LogNotice, "  BarePD - Bare Metal Pure Data");
-	m_Logger.Write (FromKernel, LogNotice, "  https://github.com/reverbrick/parepd");
+	m_Logger.Write (FromKernel, LogNotice, "  https://github.com/reverbrick/BarePD");
 	m_Logger.Write (FromKernel, LogNotice, "========================================");
 	m_Logger.Write (FromKernel, LogNotice, "");
 	m_Logger.Write (FromKernel, LogNotice, "Compile time: " __DATE__ " " __TIME__);

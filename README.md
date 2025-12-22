@@ -26,7 +26,7 @@ BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi
 
 ### 1. Download Release
 
-Download the latest release from the [Releases](https://github.com/reverbrick/parepd/releases) page.
+Download the latest release from the [Releases](https://github.com/reverbrick/BarePD/releases) page.
 
 ### 2. Prepare SD Card
 
@@ -119,8 +119,8 @@ USB audio interface support is planned for a future release.
 ### Clone Repository
 
 ```bash
-git clone --recursive https://github.com/reverbrick/parepd.git
-cd parepd
+git clone --recursive https://github.com/reverbrick/BarePD.git
+cd BarePD
 ```
 
 ### Download Toolchain (macOS ARM64)
@@ -241,7 +241,7 @@ MIDI messages from USB are automatically routed to Pd. Use standard MIDI objects
 ## Project Structure
 
 ```
-parepd/
+BarePD/
 ├── src/                    # BarePD source code
 │   ├── kernel.cpp          # Main kernel implementation
 │   ├── kernel.h            # Kernel header
