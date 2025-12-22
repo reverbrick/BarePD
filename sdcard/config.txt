@@ -8,7 +8,7 @@ arm_64bit=0
 # Use our kernel
 kernel=kernel8-32.img
 
-# Audio settings
+# Enable audio
 dtparam=audio=on
 
 # Initial turbo for faster boot
@@ -20,6 +20,23 @@ disable_overscan=1
 # GPU memory (more for CPU/audio processing)
 gpu_mem=64
 
-# Optional: Enable I2S for external DAC
+# ============================================
+# I2S DAC Configuration (PCM5102A)
+# ============================================
+# Uncomment these lines to use I2S output:
 #dtparam=i2s=on
-#dtoverlay=hifiberry-dac
+
+# PCM5102A GPIO connections:
+#   BCK  -> GPIO 18 (Pin 12) - Bit clock
+#   LRCK -> GPIO 19 (Pin 35) - Word clock / LR clock  
+#   DIN  -> GPIO 21 (Pin 40) - Data
+#   VIN  -> 3.3V
+#   GND  -> GND
+#   FMT  -> GND (I2S mode)
+#   XSMT -> 3.3V (unmute)
+
+# ============================================
+# USB Audio Interface
+# ============================================
+# No special config needed - just plug in USB audio device
+# and set audio=usb in cmdline.txt

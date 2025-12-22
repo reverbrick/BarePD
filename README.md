@@ -10,7 +10,10 @@ BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi
 - ⚡ **Ultra-Low Latency** - No OS overhead, direct hardware access
 - 🎹 **USB MIDI Support** - Connect any class-compliant USB MIDI controller
 - 💾 **SD Card Patches** - Load `.pd` patches directly from FAT32 SD card
-- 🔊 **Multiple Audio Outputs** - PWM (3.5mm jack), I2S (external DAC), or HDMI
+- 🔊 **Multiple Audio Outputs**:
+  - **PWM** - Built-in 3.5mm headphone jack
+  - **I2S** - External DACs like PCM5102A (high quality!)
+  - **USB Audio** - USB audio interfaces (planned)
 - 🖥️ **Serial Console** - Debug output via UART
 
 ## Supported Hardware
@@ -35,6 +38,7 @@ SD Card Root/
 ├── start.elf         # From Raspberry Pi firmware  
 ├── fixup.dat         # From Raspberry Pi firmware
 ├── config.txt        # BarePD configuration
+├── cmdline.txt       # Audio settings (optional)
 ├── kernel8-32.img    # BarePD kernel
 └── main.pd           # Your Pure Data patch
 ```
@@ -55,11 +59,54 @@ Create a Pure Data patch named `main.pd`. Here's a simple example:
 #X connect 1 0 2 1;
 ```
 
-Or use the graphical Pure Data editor to create patches.
-
 ### 4. Boot
 
-Insert the SD card into your Raspberry Pi and power on. Audio will start playing through the 3.5mm jack.
+Insert the SD card into your Raspberry Pi and power on. Audio will start playing through the selected output.
+
+## Audio Output Options
+
+### PWM (Default) - 3.5mm Jack
+
+Uses the built-in headphone jack. Good for testing, but lower quality.
+
+**cmdline.txt:**
+```
+audio=pwm samplerate=48000
+```
+
+### I2S DAC - PCM5102A
+
+The popular PCM5102A module provides high-quality audio output. No driver configuration needed!
+
+**Wiring:**
+
+| PCM5102A | Raspberry Pi |
+|----------|--------------|
+| VIN      | 3.3V (Pin 1) |
+| GND      | GND (Pin 6)  |
+| BCK      | GPIO 18 (Pin 12) |
+| LRCK     | GPIO 19 (Pin 35) |
+| DIN      | GPIO 21 (Pin 40) |
+| FMT      | GND (I2S mode) |
+| XSMT     | 3.3V (unmute) |
+
+**config.txt:**
+```ini
+dtparam=i2s=on
+```
+
+**cmdline.txt:**
+```
+audio=i2s samplerate=48000
+```
+
+### USB Audio Interface (Planned)
+
+USB audio interface support is planned for a future release.
+
+**Notes:**
+- Will support class-compliant USB audio devices
+- Multichannel output planned (up to 8 channels)
 
 ## Building from Source
 
@@ -105,26 +152,28 @@ make
 
 The kernel image will be at `src/kernel8-32.img`.
 
-## Configuration
+## Configuration Reference
+
+### cmdline.txt Options
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `audio` | `pwm`, `i2s` | Audio output type |
+| `samplerate` | `44100`, `48000`, `96000` | Sample rate in Hz |
 
 ### config.txt Options
 
 ```ini
-# Force 32-bit mode
+# Required settings
 arm_64bit=0
-
-# Kernel filename
 kernel=kernel8-32.img
-
-# Enable audio
 dtparam=audio=on
 
-# GPU memory allocation
-gpu_mem=64
+# For I2S DAC (PCM5102A)
+dtparam=i2s=on
 
-# For I2S DAC (uncomment if using):
-#dtparam=i2s=on
-#dtoverlay=hifiberry-dac
+# Memory allocation
+gpu_mem=64
 ```
 
 ### Serial Console
@@ -176,7 +225,7 @@ MIDI messages from USB are automatically routed to Pd. Use standard MIDI objects
 ├─────────────────────────────────────────────────────┤
 │  ┌─────────┐  ┌─────────┐  ┌──────────────────────┐ │
 │  │  libpd  │  │  USB    │  │   Audio Output       │ │
-│  │  (Pd    │◄─│  MIDI   │  │  (PWM/I2S/HDMI)      │ │
+│  │  (Pd    │◄─│  MIDI   │  │  (PWM/I2S/USB)       │ │
 │  │  Core)  │  │  Input  │  └──────────────────────┘ │
 │  └────┬────┘  └─────────┘           ▲               │
 │       │                             │               │
@@ -196,7 +245,7 @@ parepd/
 ├── src/                    # BarePD source code
 │   ├── kernel.cpp          # Main kernel implementation
 │   ├── kernel.h            # Kernel header
-│   ├── pdsounddevice.cpp   # Audio bridge to libpd
+│   ├── pdsounddevice.cpp   # Audio drivers (PWM/I2S/USB)
 │   ├── pdsounddevice.h     # Sound device header
 │   ├── pd_compat.c         # OS compatibility layer
 │   ├── main.cpp            # Entry point
@@ -205,6 +254,7 @@ parepd/
 ├── libpd/                  # libpd library (submodule)
 ├── sdcard/                 # SD card template files
 │   ├── config.txt          # Pi configuration
+│   ├── cmdline.txt         # Audio settings
 │   └── README.md           # SD card setup guide
 ├── patches/                # Example Pure Data patches
 └── README.md               # This file
@@ -218,6 +268,16 @@ parepd/
 2. Verify patch has `dac~` object connected
 3. Try a simple test patch (sine wave)
 4. Check serial console for error messages
+5. For I2S: verify wiring and config.txt settings
+6. For USB: ensure device is plugged in
+
+### I2S (PCM5102A) Not Working
+
+1. Check wiring carefully (BCK, LRCK, DIN pins)
+2. Ensure `dtparam=i2s=on` in config.txt
+3. Set `audio=i2s` in cmdline.txt
+4. Connect XSMT to 3.3V to unmute
+5. Connect FMT to GND for I2S mode
 
 ### Patch Not Loading
 
@@ -225,12 +285,6 @@ parepd/
 2. File must be in root of SD card
 3. Check patch size is under 256KB
 4. Verify patch syntax in desktop Pd first
-
-### USB MIDI Not Working
-
-1. Connect MIDI device after boot
-2. Check serial console for "USB MIDI device connected"
-3. Only class-compliant USB MIDI devices supported
 
 ## Contributing
 

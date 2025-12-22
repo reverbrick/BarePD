@@ -28,8 +28,11 @@
 
 // Default patch filename
 #define DEFAULT_PATCH_NAME      "main.pd"
-#define PATCH_DIRECTORY         ""          // Root of SD card
 #define MAX_PATCH_SIZE          (256 * 1024) // 256KB max patch size
+
+// Default audio settings
+#define DEFAULT_AUDIO_OUTPUT    AudioOutputPWM
+#define DEFAULT_SAMPLE_RATE_HZ  48000
 
 enum TShutdownMode
 {
@@ -49,9 +52,15 @@ public:
 	TShutdownMode Run (void);
 
 private:
+	// Configuration
+	void ParseConfig (void);
+	
 	// Patch loading
 	boolean LoadPatch (const char *pPatchName);
 	boolean FindAndLoadPatch (void);
+
+	// Audio setup
+	boolean SetupAudio (void);
 
 	// MIDI handlers
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength);
@@ -78,8 +87,12 @@ private:
 	CEMMCDevice		m_EMMC;
 	CFATFileSystem		m_FileSystem;
 
-	// PD Sound device
-	CPdSoundDevice		*m_pPdSound;
+	// Audio configuration
+	TAudioOutputType	m_AudioOutput;
+	unsigned		m_nSampleRate;
+	
+	// Sound device (generic pointer, actual type depends on config)
+	CSoundBaseDevice	*m_pSoundDevice;
 
 	// USB MIDI
 	CUSBMIDIDevice		*m_pMIDIDevice;

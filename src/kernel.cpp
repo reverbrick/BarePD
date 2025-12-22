@@ -25,7 +25,9 @@ CKernel::CKernel (void)
 	m_USBHCI (&m_Interrupt, &m_Timer, TRUE),
 	m_I2CMaster (CMachineInfo::Get ()->GetDevice (DeviceI2CMaster), TRUE),
 	m_EMMC (&m_Interrupt, &m_Timer, &m_ActLED),
-	m_pPdSound (nullptr),
+	m_AudioOutput (DEFAULT_AUDIO_OUTPUT),
+	m_nSampleRate (DEFAULT_SAMPLE_RATE_HZ),
+	m_pSoundDevice (nullptr),
 	m_pMIDIDevice (nullptr),
 	m_pPatch (nullptr)
 {
@@ -35,6 +37,7 @@ CKernel::CKernel (void)
 
 CKernel::~CKernel (void)
 {
+	delete m_pSoundDevice;
 	s_pThis = nullptr;
 }
 
@@ -90,6 +93,56 @@ boolean CKernel::Initialize (void)
 	return bOK;
 }
 
+void CKernel::ParseConfig (void)
+{
+	// Parse audio output type from cmdline.txt
+	// Format: audio=pwm|i2s|usb
+	const char *pAudioType = m_Options.GetAppOptionString ("audio", "pwm");
+	m_AudioOutput = CAudioOutputFactory::ParseType (pAudioType);
+	
+	// Parse sample rate (optional)
+	// Format: samplerate=44100|48000|96000
+	unsigned nRate = m_Options.GetAppOptionDecimal ("samplerate", DEFAULT_SAMPLE_RATE_HZ);
+	if (nRate >= 22050 && nRate <= 192000)
+	{
+		m_nSampleRate = nRate;
+	}
+	
+	m_Logger.Write (FromKernel, LogNotice, "Audio config: %s @ %u Hz",
+	                CAudioOutputFactory::GetTypeName (m_AudioOutput), m_nSampleRate);
+}
+
+boolean CKernel::SetupAudio (void)
+{
+	// Create the appropriate sound device
+	m_pSoundDevice = CAudioOutputFactory::Create (m_AudioOutput, &m_Interrupt,
+	                                              &m_I2CMaster, m_nSampleRate);
+	
+	if (m_pSoundDevice == nullptr)
+	{
+		m_Logger.Write (FromKernel, LogError, "Failed to create audio device");
+		return FALSE;
+	}
+	
+	// Initialize based on device type
+	boolean bOK = FALSE;
+	
+	switch (m_AudioOutput)
+	{
+	case AudioOutputPWM:
+		bOK = static_cast<CPdSoundPWM*>(m_pSoundDevice)->Initialize();
+		break;
+	case AudioOutputI2S:
+		bOK = static_cast<CPdSoundI2S*>(m_pSoundDevice)->Initialize();
+		break;
+	default:
+		m_Logger.Write (FromKernel, LogError, "Unsupported audio output type");
+		break;
+	}
+	
+	return bOK;
+}
+
 boolean CKernel::LoadPatch (const char *pPatchName)
 {
 	m_Logger.Write (FromKernel, LogNotice, "Loading patch: %s", pPatchName);
@@ -133,7 +186,6 @@ boolean CKernel::LoadPatch (const char *pPatchName)
 	m_Logger.Write (FromKernel, LogNotice, "Read %u bytes from patch file", nTotalRead);
 
 	// Extract directory and filename from patch path
-	// For simplicity, we'll use the root directory
 	const char *pDirectory = ".";
 	
 	// Find the filename part (after last '/')
@@ -147,7 +199,6 @@ boolean CKernel::LoadPatch (const char *pPatchName)
 	}
 
 	// Open the patch in libpd
-	// libpd_openfile expects (basename, directory)
 	m_pPatch = libpd_openfile (pFilename, pDirectory);
 	
 	if (m_pPatch == nullptr)
@@ -231,6 +282,9 @@ TShutdownMode CKernel::Run (void)
 
 	m_Logger.Write (FromKernel, LogNotice, "SD card mounted successfully");
 
+	// Parse configuration
+	ParseConfig ();
+
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
 	
@@ -262,11 +316,10 @@ TShutdownMode CKernel::Run (void)
 		m_Logger.Write (FromKernel, LogWarning, "libpd already initialized");
 	}
 
-	// Create the PD sound device
-	m_pPdSound = new CPdSoundDevice (&m_Interrupt, &m_I2CMaster);
-	if (!m_pPdSound->Initialize ())
+	// Setup audio output
+	if (!SetupAudio ())
 	{
-		m_Logger.Write (FromKernel, LogPanic, "Cannot initialize PD sound device");
+		m_Logger.Write (FromKernel, LogPanic, "Cannot initialize audio output");
 		return ShutdownHalt;
 	}
 
@@ -286,21 +339,22 @@ TShutdownMode CKernel::Run (void)
 	m_Logger.Write (FromKernel, LogNotice, "Starting audio output...");
 	
 	// Start sound device
-	if (!m_pPdSound->Start ())
+	if (!m_pSoundDevice->Start ())
 	{
-		m_Logger.Write (FromKernel, LogPanic, "Cannot start sound device");
+		m_Logger.Write (FromKernel, LogPanic, "Cannot start audio device");
 		return ShutdownHalt;
 	}
 
 	m_Logger.Write (FromKernel, LogNotice, "");
 	m_Logger.Write (FromKernel, LogNotice, "BarePD is running!");
+	m_Logger.Write (FromKernel, LogNotice, "Audio output: %s", CAudioOutputFactory::GetTypeName(m_AudioOutput));
 	m_Logger.Write (FromKernel, LogNotice, "Connect USB MIDI to send notes to the patch.");
 	m_Logger.Write (FromKernel, LogNotice, "");
 
 	// Main loop
-	for (unsigned nCount = 0; m_pPdSound->IsActive (); nCount++)
+	for (unsigned nCount = 0; m_pSoundDevice->IsActive (); nCount++)
 	{
-		// Update USB devices (for MIDI etc)
+		// Update USB devices (for MIDI and USB audio)
 		boolean bUpdated = m_USBHCI.UpdatePlugAndPlay ();
 
 		// Check for MIDI device

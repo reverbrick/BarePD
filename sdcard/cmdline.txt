@@ -1,0 +1,2 @@
+audio=pwm samplerate=48000
+
