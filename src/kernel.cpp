@@ -289,29 +289,37 @@ TShutdownMode CKernel::Run (void)
 	// Parse configuration
 	ParseConfig ();
 
-	// Initialize libpd
-	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
-	m_Timer.MsDelay(100);
-	
-	// Test malloc before libpd (crash test)
-	m_Logger.Write (FromKernel, LogNotice, "Testing malloc...");
-	m_Timer.MsDelay(50);
-	void *testMem = malloc(1024);
-	if (testMem) {
-		m_Logger.Write (FromKernel, LogNotice, "malloc OK at %p", testMem);
-		free(testMem);
-	} else {
-		m_Logger.Write (FromKernel, LogError, "malloc FAILED");
+	// Ensure VFP/NEON is properly configured - disable exception trapping
+	m_Logger.Write (FromKernel, LogNotice, "Configuring FPU...");
+	{
+		// Read FPEXC and ensure EX bit is clear, EN bit is set
+		unsigned int fpexc;
+		asm volatile ("fmrx %0, fpexc" : "=r" (fpexc));
+		m_Logger.Write (FromKernel, LogDebug, "FPEXC before: 0x%08X", fpexc);
+		
+		// Set EN bit (enable VFP), clear EX bit (no exception pending)
+		fpexc = (fpexc | (1 << 30)) & ~(1 << 31);  // EN=1, EX=0
+		asm volatile ("fmxr fpexc, %0" : : "r" (fpexc));
+		
+		asm volatile ("fmrx %0, fpexc" : "=r" (fpexc));
+		m_Logger.Write (FromKernel, LogDebug, "FPEXC after: 0x%08X", fpexc);
+		
+		// Also configure FPSCR to not trap on exceptions
+		unsigned int fpscr;
+		asm volatile ("fmrx %0, fpscr" : "=r" (fpscr));
+		m_Logger.Write (FromKernel, LogDebug, "FPSCR before: 0x%08X", fpscr);
+		
+		// Clear exception trap enable bits (bits 8-12), enable flush-to-zero and default NaN
+		fpscr = (fpscr & ~0x1F00) | (1 << 24) | (1 << 25);  // FZ=1, DN=1, no traps
+		asm volatile ("fmxr fpscr, %0" : : "r" (fpscr));
+		
+		asm volatile ("fmrx %0, fpscr" : "=r" (fpscr));
+		m_Logger.Write (FromKernel, LogDebug, "FPSCR after: 0x%08X", fpscr);
 	}
 	m_Timer.MsDelay(50);
 	
-	// Test floating point (crash test)
-	m_Logger.Write (FromKernel, LogNotice, "Testing floating point...");
-	m_Timer.MsDelay(50);
-	volatile float testFloat = 440.0f;
-	volatile float testResult = testFloat * 2.0f;
-	m_Logger.Write (FromKernel, LogNotice, "Float test: %d (expect 880)", (int)testResult);
-	m_Timer.MsDelay(50);
+	// Initialize libpd
+	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
 	
 	m_Logger.Write (FromKernel, LogDebug, "Setting up libpd hooks...");
 	

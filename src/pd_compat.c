@@ -18,35 +18,15 @@
 
 /* Newlib system call stubs - these are called by newlib's libc */
 
-/* _sbrk - increase program data space for malloc 
- * IMPORTANT: Must check bounds to avoid stack collision!
+/* Use Circle's memory allocator instead of newlib's malloc.
+ * Circle's malloc is in libcircle.a and works properly in bare metal.
+ * We just need to provide _sbrk as a stub since newlib might still reference it.
  */
-extern char _end;  /* Defined by the linker - end of BSS */
-static char *heap_end = 0;
-
-/* Define heap limit - leave 1MB for stack */
-#define HEAP_MAX_SIZE (16 * 1024 * 1024)  /* 16MB max heap */
 
 void *_sbrk(ptrdiff_t incr) {
-    extern char _end;
-    static char *heap_limit = 0;
-    char *prev_heap_end;
-    
-    if (heap_end == 0) {
-        heap_end = &_end;
-        heap_limit = heap_end + HEAP_MAX_SIZE;
-    }
-    
-    prev_heap_end = heap_end;
-    
-    /* Check for heap overflow */
-    if (heap_end + incr > heap_limit) {
-        /* Out of memory - return error */
-        return (void *)-1;
-    }
-    
-    heap_end += incr;
-    return (void *)prev_heap_end;
+    (void)incr;
+    /* Return error - we want Circle's malloc to be used, not newlib's */
+    return (void *)-1;
 }
 
 /* _write - write to a file descriptor */
