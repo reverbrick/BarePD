@@ -3,6 +3,7 @@ name: Build BarePD
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -106,3 +107,69 @@ jobs:
         path: src/kernel.img
         retention-days: 30
 
+  release:
+    name: Create Release
+    needs: [build-rpi3b, build-zerow]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Download RPi 3B kernel
+      uses: actions/download-artifact@v4
+      with:
+        name: barepd-rpi3b-kernel
+        path: release/rpi3b
+    
+    - name: Download Zero W kernel
+      uses: actions/download-artifact@v4
+      with:
+        name: barepd-zerow-kernel
+        path: release/zerow
+    
+    - name: Prepare release packages
+      run: |
+        # Create RPi 3B package
+        mkdir -p pkg-rpi3b
+        cp release/rpi3b/kernel8-32.img pkg-rpi3b/
+        cp sdcard/config.txt pkg-rpi3b/
+        cp sdcard/cmdline.txt pkg-rpi3b/
+        cp patches/*.pd pkg-rpi3b/ 2>/dev/null || true
+        echo "# BarePD for Raspberry Pi 3B/3B+" > pkg-rpi3b/README.txt
+        echo "" >> pkg-rpi3b/README.txt
+        echo "Copy all files to a FAT32 SD card along with:" >> pkg-rpi3b/README.txt
+        echo "- bootcode.bin, start.elf, fixup.dat from https://github.com/raspberrypi/firmware/tree/master/boot" >> pkg-rpi3b/README.txt
+        echo "- Your main.pd patch file" >> pkg-rpi3b/README.txt
+        cd pkg-rpi3b && zip -r ../BarePD-${{ github.ref_name }}-rpi3b.zip . && cd ..
+        
+        # Create Zero W package
+        mkdir -p pkg-zerow
+        cp release/zerow/kernel.img pkg-zerow/
+        cp sdcard/config-zerow.txt pkg-zerow/config.txt
+        cp sdcard/cmdline.txt pkg-zerow/
+        cp patches/*.pd pkg-zerow/ 2>/dev/null || true
+        echo "# BarePD for Raspberry Pi Zero W" > pkg-zerow/README.txt
+        echo "" >> pkg-zerow/README.txt
+        echo "Copy all files to a FAT32 SD card along with:" >> pkg-zerow/README.txt
+        echo "- bootcode.bin, start.elf, fixup.dat from https://github.com/raspberrypi/firmware/tree/master/boot" >> pkg-zerow/README.txt
+        echo "- Your main.pd patch file" >> pkg-zerow/README.txt
+        cd pkg-zerow && zip -r ../BarePD-${{ github.ref_name }}-zerow.zip . && cd ..
+        
+        # List packages
+        ls -la *.zip
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: BarePD ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          BarePD-${{ github.ref_name }}-rpi3b.zip
+          BarePD-${{ github.ref_name }}-zerow.zip
