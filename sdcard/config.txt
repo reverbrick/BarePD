@@ -1,0 +1,25 @@
+#
+# BarePD configuration for Raspberry Pi 3B (32-bit)
+#
+
+# Force 32-bit mode
+arm_64bit=0
+
+# Use our kernel
+kernel=kernel8-32.img
+
+# Audio settings
+dtparam=audio=on
+
+# Initial turbo for faster boot
+initial_turbo=1
+
+# Disable overscan
+disable_overscan=1
+
+# GPU memory (more for CPU/audio processing)
+gpu_mem=64
+
+# Optional: Enable I2S for external DAC
+#dtparam=i2s=on
+#dtoverlay=hifiberry-dac

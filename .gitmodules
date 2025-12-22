@@ -1,0 +1,7 @@
+[submodule "circle"]
+	path = circle
+	url = https://github.com/rsta2/circle.git
+[submodule "libpd"]
+	path = libpd
+	url = https://github.com/libpd/libpd.git
+
