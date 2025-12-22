@@ -1,12 +1,13 @@
 name: Build BarePD
 
 on:
+  # Only build on version tags (for releases) and PRs (for testing)
+  # Skip regular main pushes - they'll be built when tagged
   push:
-    branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger for testing
 
 jobs:
   build-rpi3b:
