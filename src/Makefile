@@ -105,6 +105,7 @@ INCLUDE += \
 	-I.
 
 # C/C++ flags for libpd
+# -mthumb-interwork enables proper ARM/Thumb mode switching (newlib is thumb)
 CFLAGS_LIBPD = \
 	-DPD \
 	-DUSEAPI_DUMMY \
@@ -112,6 +113,7 @@ CFLAGS_LIBPD = \
 	-DLIBPD_NO_NUMERIC \
 	-DLITTLE_ENDIAN=1234 \
 	-DBYTE_ORDER=1234 \
+	-mthumb-interwork \
 	-Wno-unused-parameter \
 	-Wno-sign-compare \
 	-Wno-unused-variable \
