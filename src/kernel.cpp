@@ -16,6 +16,7 @@
 // libpd includes
 extern "C" {
 #include "z_libpd.h"
+#include "pd_fileio.h"
 }
 
 static const char FromKernel[] = "kernel";
@@ -187,46 +188,10 @@ boolean CKernel::SetupAudio (void)
 boolean CKernel::LoadPatch (const char *pPatchName)
 {
 	m_Logger.Write (FromKernel, LogNotice, "Loading patch: %s", pPatchName);
+	LogToBuffer(FromKernel, "Loading patch...");
 
-	// Open the patch file
-	unsigned hFile = m_FileSystem.FileOpen (pPatchName);
-	if (hFile == 0)
-	{
-		m_Logger.Write (FromKernel, LogWarning, "Cannot open patch file: %s", pPatchName);
-		return FALSE;
-	}
-
-	// Allocate buffer for patch content
-	static char patchBuffer[MAX_PATCH_SIZE];
-	unsigned nBytesRead = 0;
-	unsigned nTotalRead = 0;
-
-	// Read the entire file
-	while ((nBytesRead = m_FileSystem.FileRead (hFile, patchBuffer + nTotalRead, 
-	                                            MAX_PATCH_SIZE - nTotalRead - 1)) > 0)
-	{
-		nTotalRead += nBytesRead;
-		if (nTotalRead >= MAX_PATCH_SIZE - 1)
-		{
-			m_Logger.Write (FromKernel, LogWarning, "Patch file too large (max %u bytes)", MAX_PATCH_SIZE);
-			break;
-		}
-	}
-
-	m_FileSystem.FileClose (hFile);
-
-	if (nTotalRead == 0)
-	{
-		m_Logger.Write (FromKernel, LogWarning, "Empty patch file: %s", pPatchName);
-		return FALSE;
-	}
-
-	// Null-terminate the buffer
-	patchBuffer[nTotalRead] = '\0';
-
-	m_Logger.Write (FromKernel, LogNotice, "Read %u bytes from patch file", nTotalRead);
-
-	// Extract directory and filename from patch path
+	// libpd will use our file I/O bridge (pd_fileio) to read the file
+	// Pass "." as directory - libpd expects filename and directory separately
 	const char *pDirectory = ".";
 	
 	// Find the filename part (after last '/')
@@ -239,12 +204,15 @@ boolean CKernel::LoadPatch (const char *pPatchName)
 		pSlash++;
 	}
 
-	// Open the patch in libpd
+	m_Logger.Write (FromKernel, LogDebug, "Opening patch: dir='%s' file='%s'", pDirectory, pFilename);
+	
+	// Open the patch in libpd (this will use our _open/_read/_close stubs)
 	m_pPatch = libpd_openfile (pFilename, pDirectory);
 	
 	if (m_pPatch == nullptr)
 	{
 		m_Logger.Write (FromKernel, LogError, "libpd failed to open patch: %s", pPatchName);
+		LogToBuffer(FromKernel, "ERROR: libpd_openfile failed");
 		return FALSE;
 	}
 
@@ -332,6 +300,10 @@ TShutdownMode CKernel::Run (void)
 
 	m_Logger.Write (FromKernel, LogNotice, "SD card mounted successfully");
 	LogToBuffer(FromKernel, "SD card mounted successfully");
+	
+	// Initialize file I/O bridge for libpd
+	pd_fileio_init(&m_FileSystem);
+	LogToBuffer(FromKernel, "File I/O initialized");
 
 	// Parse configuration
 	ParseConfig ();

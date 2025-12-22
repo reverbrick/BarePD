@@ -95,7 +95,7 @@ PD_CORE_OBJS = \
 	pd_x_vexp_fun.o
 
 # All object files - OBJS is used by Circle's Rules.mk
-OBJS = main.o kernel.o pdsounddevice.o pd_compat.o \
+OBJS = main.o kernel.o pdsounddevice.o pd_compat.o pd_fileio.o \
        $(LIBPD_WRAPPER_OBJS) $(PD_CORE_OBJS)
 
 # Include paths

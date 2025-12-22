@@ -16,6 +16,9 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
+/* File I/O bridge - implemented in pd_fileio.cpp */
+#include "pd_fileio.h"
+
 /* Newlib system call stubs - these are called by newlib's libc */
 
 /* _sbrk - increase program data space for malloc
@@ -45,26 +48,29 @@ int _write(int fd, const void *buf, size_t count) {
     return count;  /* Pretend we wrote everything */
 }
 
-/* _read - read from a file descriptor */
+/* _read - read from a file descriptor using Circle's filesystem */
 int _read(int fd, void *buf, size_t count) {
-    (void)fd;
-    (void)buf;
-    (void)count;
-    return 0;  /* EOF */
+    /* fd 0,1,2 are stdin/stdout/stderr */
+    if (fd < 3) {
+        return 0;  /* EOF for stdin */
+    }
+    return pd_fileio_read(fd, buf, count);
 }
 
 /* _close - close a file descriptor */
 int _close(int fd) {
-    (void)fd;
-    return 0;
+    if (fd < 3) {
+        return 0;  /* Can't close stdin/stdout/stderr */
+    }
+    return pd_fileio_close(fd);
 }
 
 /* _lseek - reposition read/write file offset */
 off_t _lseek(int fd, off_t offset, int whence) {
-    (void)fd;
-    (void)offset;
-    (void)whence;
-    return -1;
+    if (fd < 3) {
+        return -1;
+    }
+    return pd_fileio_lseek(fd, offset, whence);
 }
 
 /* _fstat - get file status */
@@ -214,11 +220,9 @@ int closedir(DIR *dirp) {
     return 0;
 }
 
-/* stat stub */
+/* stat - get file status using Circle's filesystem */
 int stat(const char *pathname, struct stat *statbuf) {
-    (void)pathname;
-    (void)statbuf;
-    return -1;
+    return pd_fileio_stat(pathname, statbuf);
 }
 
 /* getcwd stub */
@@ -285,10 +289,9 @@ void x_net_setup(void) { }
 void x_file_setup(void) { }
 void d_soundfile_setup(void) { }
 
-/* _open stub for newlib */
+/* _open - open a file using Circle's filesystem */
 int _open(const char *path, int flags, ...) {
-    (void)path; (void)flags;
-    return -1;
+    return pd_fileio_open(path, flags);
 }
 
 /* _fini stub */
