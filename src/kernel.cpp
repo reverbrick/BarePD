@@ -289,30 +289,6 @@ TShutdownMode CKernel::Run (void)
 	// Parse configuration
 	ParseConfig ();
 
-	// Clear any pending VFP exceptions before libpd init
-	// Pure Data uses VFP heavily and we want clean state
-	{
-		unsigned int fpscr;
-		asm volatile ("vmrs %0, fpscr" : "=r" (fpscr));
-		m_Logger.Write (FromKernel, LogDebug, "FPSCR before libpd: 0x%08X", fpscr);
-		
-		// Clear cumulative exception flags (bits 0-4) and exception bits
-		fpscr &= ~0x9F;  // Clear IDC, IXC, UFC, OFC, DZC, IOC
-		asm volatile ("vmsr fpscr, %0" : : "r" (fpscr));
-		
-		unsigned int fpexc;
-		asm volatile ("vmrs %0, fpexc" : "=r" (fpexc));
-		m_Logger.Write (FromKernel, LogDebug, "FPEXC before libpd: 0x%08X", fpexc);
-		
-		// Clear EX bit if set
-		if (fpexc & (1 << 31)) {
-			fpexc &= ~(1 << 31);
-			asm volatile ("vmsr fpexc, %0" : : "r" (fpexc));
-			m_Logger.Write (FromKernel, LogWarning, "Cleared pending VFP exception!");
-		}
-	}
-	m_Timer.MsDelay(50);
-	
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
 	
