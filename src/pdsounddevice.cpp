@@ -70,6 +70,8 @@ boolean CPdSoundPWM::Initialize (void)
 	return TRUE;
 }
 
+static unsigned s_nPWMChunkCount = 0;
+
 unsigned CPdSoundPWM::GetChunk (u32 *pBuffer, unsigned nChunkSize)
 {
 	// PWM uses 32-bit samples where only the upper bits matter
@@ -97,6 +99,21 @@ unsigned CPdSoundPWM::GetChunk (u32 *pBuffer, unsigned nChunkSize)
 	int nRangeMax = GetRangeMax();
 	int nRange = nRangeMax - nRangeMin;
 	int nMid = (nRangeMin + nRangeMax) / 2;
+	
+	// Debug: log first few chunks and periodically
+	s_nPWMChunkCount++;
+	if (s_nPWMChunkCount <= 3 || (s_nPWMChunkCount % 1000) == 0)
+	{
+		float maxSample = 0.0f;
+		for (unsigned i = 0; i < nProcessFrames * m_nOutChannels && i < 256; i++)
+		{
+			float absVal = m_pOutBuffer[i] > 0 ? m_pOutBuffer[i] : -m_pOutBuffer[i];
+			if (absVal > maxSample) maxSample = absVal;
+		}
+		CLogger::Get()->Write(FromPdSound, LogDebug, 
+			"PWM chunk #%u: size=%u frames=%u ticks=%u range=[%d,%d] maxSample=%.4f",
+			s_nPWMChunkCount, nChunkSize, nFrames, nTicks, nRangeMin, nRangeMax, (double)maxSample);
+	}
 	
 	unsigned nSamplesOut = nProcessFrames * m_nOutChannels;
 	

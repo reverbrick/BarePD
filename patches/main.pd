@@ -18,14 +18,20 @@
 #X restore 150 200 pd synth;
 #X obj 150 50 notein;
 #X obj 150 100 stripnote;
-#X obj 150 300 dac~;
-#X text 50 20 BarePD - Simple MIDI Synth;
-#X text 300 100 Connect a USB MIDI keyboard;
-#X text 300 120 and play notes!;
-#X connect 0 0 3 0;
-#X connect 0 0 3 1;
+#X obj 150 350 dac~;
+#X text 50 20 BarePD - MIDI Synth + Test Tone;
+#X text 300 100 Connect USB MIDI keyboard;
+#X text 300 120 or listen to test tone;
+#X obj 350 250 osc~ 440;
+#X obj 350 290 *~ 0.15;
+#X obj 100 300 +~;
+#X connect 0 0 9 0;
 #X connect 1 0 2 0;
 #X connect 1 1 2 1;
 #X connect 2 0 0 0;
 #X connect 2 1 0 1;
+#X connect 7 0 8 0;
+#X connect 8 0 9 1;
+#X connect 9 0 3 0;
+#X connect 9 0 3 1;
 
