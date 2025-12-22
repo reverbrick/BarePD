@@ -75,6 +75,7 @@ jobs:
   build-zerow:
     name: Build for Raspberry Pi Zero W
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail the whole workflow if Zero W fails
     
     steps:
     - name: Checkout repository
@@ -123,9 +124,9 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-rpi3b, build-zerow]
+    needs: [build-rpi3b]  # Only require RPi 3B build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && always()
     
     permissions:
       contents: write
@@ -142,6 +143,7 @@ jobs:
     
     - name: Download Zero W kernel
       uses: actions/download-artifact@v4
+      continue-on-error: true  # Zero W build might have failed
       with:
         name: barepd-zerow-kernel
         path: release/zerow
@@ -253,6 +255,7 @@ jobs:
         zip BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip $IMG
     
     - name: Create RPi Zero W SD card image
+      if: hashFiles('release/zerow/kernel.img') != ''
       run: |
         IMG=BarePD-${{ github.ref_name }}-zerow.img
         
@@ -336,17 +339,18 @@ jobs:
         EOF
         cd pkg-rpi3b && zip -r ../BarePD-${{ github.ref_name }}-rpi3b-files.zip . && cd ..
         
-        # Create Zero W package
-        mkdir -p pkg-zerow
-        cp firmware/bootcode.bin pkg-zerow/
-        cp firmware/start.elf pkg-zerow/
-        cp firmware/fixup.dat pkg-zerow/
-        cp firmware/bcm2708-rpi-zero-w.dtb pkg-zerow/
-        cp release/zerow/kernel.img pkg-zerow/
-        cp sdcard/config-zerow.txt pkg-zerow/config.txt
-        cp sdcard/cmdline.txt pkg-zerow/
-        cp patches/main.pd pkg-zerow/
-        cat > pkg-zerow/README.txt << 'EOF'
+        # Create Zero W package (only if build succeeded)
+        if [ -f release/zerow/kernel.img ]; then
+          mkdir -p pkg-zerow
+          cp firmware/bootcode.bin pkg-zerow/
+          cp firmware/start.elf pkg-zerow/
+          cp firmware/fixup.dat pkg-zerow/
+          cp firmware/bcm2708-rpi-zero-w.dtb pkg-zerow/
+          cp release/zerow/kernel.img pkg-zerow/
+          cp sdcard/config-zerow.txt pkg-zerow/config.txt
+          cp sdcard/cmdline.txt pkg-zerow/
+          cp patches/main.pd pkg-zerow/
+          cat > pkg-zerow/README.txt << 'EOF'
         BarePD for Raspberry Pi Zero W
         ==============================
         
@@ -361,10 +365,13 @@ jobs:
         
         More info: https://github.com/reverbrick/BarePD
         EOF
-        cd pkg-zerow && zip -r ../BarePD-${{ github.ref_name }}-zerow-files.zip . && cd ..
+          cd pkg-zerow && zip -r ../BarePD-${{ github.ref_name }}-zerow-files.zip . && cd ..
+        else
+          echo "Zero W build not available, skipping package"
+        fi
         
         # List all packages
-        ls -la *.zip
+        ls -la *.zip || echo "No ZIP files yet"
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
@@ -397,8 +404,7 @@ jobs:
           - **PWM** (default): 3.5mm headphone jack
           - **I2S**: PCM5102A DAC module (edit config.txt)
           
+          *Note: Zero W build may not be available in all releases.*
+          
         files: |
-          BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip
-          BarePD-${{ github.ref_name }}-zerow-sdcard.zip
-          BarePD-${{ github.ref_name }}-rpi3b-files.zip
-          BarePD-${{ github.ref_name }}-zerow-files.zip
+          BarePD-*.zip
