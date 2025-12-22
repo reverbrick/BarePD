@@ -290,9 +290,27 @@ TShutdownMode CKernel::Run (void)
 
 	// Initialize libpd
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
-	
-	// Force flush to screen before potential crash
 	m_Timer.MsDelay(100);
+	
+	// Test malloc before libpd (crash test)
+	m_Logger.Write (FromKernel, LogNotice, "Testing malloc...");
+	m_Timer.MsDelay(50);
+	void *testMem = malloc(1024);
+	if (testMem) {
+		m_Logger.Write (FromKernel, LogNotice, "malloc OK at %p", testMem);
+		free(testMem);
+	} else {
+		m_Logger.Write (FromKernel, LogError, "malloc FAILED");
+	}
+	m_Timer.MsDelay(50);
+	
+	// Test floating point (crash test)
+	m_Logger.Write (FromKernel, LogNotice, "Testing floating point...");
+	m_Timer.MsDelay(50);
+	volatile float testFloat = 440.0f;
+	volatile float testResult = testFloat * 2.0f;
+	m_Logger.Write (FromKernel, LogNotice, "Float test: %d (expect 880)", (int)testResult);
+	m_Timer.MsDelay(50);
 	
 	m_Logger.Write (FromKernel, LogDebug, "Setting up libpd hooks...");
 	
