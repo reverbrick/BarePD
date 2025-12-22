@@ -161,7 +161,7 @@ jobs:
     - name: Install tools for image creation
       run: |
         sudo apt-get update
-        sudo apt-get install -y mtools dosfstools
+        sudo apt-get install -y mtools dosfstools parted
     
     - name: Create example patch
       run: |
@@ -180,70 +180,119 @@ jobs:
     
     - name: Create RPi 3B SD card image
       run: |
-        # Create 64MB FAT32 image (plenty of room for patches)
-        dd if=/dev/zero of=BarePD-${{ github.ref_name }}-rpi3b.img bs=1M count=64
+        IMG=BarePD-${{ github.ref_name }}-rpi3b.img
         
-        # Create FAT32 filesystem
-        mkfs.vfat -F 32 -n BAREPD BarePD-${{ github.ref_name }}-rpi3b.img
+        # Create 64MB image
+        dd if=/dev/zero of=$IMG bs=1M count=64
         
-        # Copy files using mtools
-        # Firmware files
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bootcode.bin ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/start.elf ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/fixup.dat ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/start_x.elf ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/fixup_x.dat ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bcm2710-rpi-3-b.dtb ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bcm2710-rpi-3-b-plus.dtb ::
+        # Create MBR partition table with one FAT32 partition
+        # Partition starts at sector 2048 (1MB offset) for alignment
+        parted -s $IMG mklabel msdos
+        parted -s $IMG mkpart primary fat32 1MiB 100%
+        parted -s $IMG set 1 boot on
+        parted -s $IMG set 1 lba on
         
-        # BarePD kernel
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img release/rpi3b/kernel8-32.img ::
+        # Show partition table
+        parted -s $IMG print
         
-        # Config files
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img sdcard/config.txt ::
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img sdcard/cmdline.txt ::
+        # Setup loop device to access the partition
+        LOOP=$(sudo losetup -f --show -P $IMG)
+        echo "Loop device: $LOOP"
         
-        # Example patch
-        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img patches/main.pd ::
+        # Wait for partition to appear
+        sleep 1
+        
+        # Format the partition as FAT32
+        sudo mkfs.vfat -F 32 -n BAREPD ${LOOP}p1
+        
+        # Mount and copy files
+        sudo mkdir -p /mnt/sdcard
+        sudo mount ${LOOP}p1 /mnt/sdcard
+        
+        # Copy firmware files
+        sudo cp firmware/bootcode.bin /mnt/sdcard/
+        sudo cp firmware/start.elf /mnt/sdcard/
+        sudo cp firmware/fixup.dat /mnt/sdcard/
+        sudo cp firmware/start_x.elf /mnt/sdcard/
+        sudo cp firmware/fixup_x.dat /mnt/sdcard/
+        sudo cp firmware/bcm2710-rpi-3-b.dtb /mnt/sdcard/
+        sudo cp firmware/bcm2710-rpi-3-b-plus.dtb /mnt/sdcard/
+        
+        # Copy BarePD kernel
+        sudo cp release/rpi3b/kernel8-32.img /mnt/sdcard/
+        
+        # Copy config files
+        sudo cp sdcard/config.txt /mnt/sdcard/
+        sudo cp sdcard/cmdline.txt /mnt/sdcard/
+        
+        # Copy example patch
+        sudo cp patches/main.pd /mnt/sdcard/
         
         # Show contents
-        mdir -i BarePD-${{ github.ref_name }}-rpi3b.img
+        ls -la /mnt/sdcard/
+        
+        # Unmount and cleanup
+        sudo umount /mnt/sdcard
+        sudo losetup -d $LOOP
         
         # Compress the image
-        zip BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip BarePD-${{ github.ref_name }}-rpi3b.img
+        zip BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip $IMG
     
     - name: Create RPi Zero W SD card image
       run: |
-        # Create 64MB FAT32 image
-        dd if=/dev/zero of=BarePD-${{ github.ref_name }}-zerow.img bs=1M count=64
+        IMG=BarePD-${{ github.ref_name }}-zerow.img
         
-        # Create FAT32 filesystem
-        mkfs.vfat -F 32 -n BAREPD BarePD-${{ github.ref_name }}-zerow.img
+        # Create 64MB image
+        dd if=/dev/zero of=$IMG bs=1M count=64
         
-        # Copy files using mtools
-        # Firmware files
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/bootcode.bin ::
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/start.elf ::
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/fixup.dat ::
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/start_cd.elf ::
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/fixup_cd.dat ::
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/bcm2708-rpi-zero-w.dtb ::
+        # Create MBR partition table with one FAT32 partition
+        parted -s $IMG mklabel msdos
+        parted -s $IMG mkpart primary fat32 1MiB 100%
+        parted -s $IMG set 1 boot on
+        parted -s $IMG set 1 lba on
         
-        # BarePD kernel
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img release/zerow/kernel.img ::
+        # Show partition table
+        parted -s $IMG print
         
-        # Config files (use zerow config, renamed to config.txt)
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img sdcard/config-zerow.txt ::config.txt
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img sdcard/cmdline.txt ::
+        # Setup loop device
+        LOOP=$(sudo losetup -f --show -P $IMG)
+        echo "Loop device: $LOOP"
+        sleep 1
         
-        # Example patch
-        mcopy -i BarePD-${{ github.ref_name }}-zerow.img patches/main.pd ::
+        # Format the partition as FAT32
+        sudo mkfs.vfat -F 32 -n BAREPD ${LOOP}p1
+        
+        # Mount and copy files
+        sudo mkdir -p /mnt/sdcard
+        sudo mount ${LOOP}p1 /mnt/sdcard
+        
+        # Copy firmware files
+        sudo cp firmware/bootcode.bin /mnt/sdcard/
+        sudo cp firmware/start.elf /mnt/sdcard/
+        sudo cp firmware/fixup.dat /mnt/sdcard/
+        sudo cp firmware/start_cd.elf /mnt/sdcard/
+        sudo cp firmware/fixup_cd.dat /mnt/sdcard/
+        sudo cp firmware/bcm2708-rpi-zero-w.dtb /mnt/sdcard/
+        
+        # Copy BarePD kernel
+        sudo cp release/zerow/kernel.img /mnt/sdcard/
+        
+        # Copy config files (use zerow config)
+        sudo cp sdcard/config-zerow.txt /mnt/sdcard/config.txt
+        sudo cp sdcard/cmdline.txt /mnt/sdcard/
+        
+        # Copy example patch
+        sudo cp patches/main.pd /mnt/sdcard/
         
         # Show contents
-        mdir -i BarePD-${{ github.ref_name }}-zerow.img
+        ls -la /mnt/sdcard/
+        
+        # Unmount and cleanup
+        sudo umount /mnt/sdcard
+        sudo losetup -d $LOOP
         
         # Compress the image
-        zip BarePD-${{ github.ref_name }}-zerow-sdcard.zip BarePD-${{ github.ref_name }}-zerow.img
+        zip BarePD-${{ github.ref_name }}-zerow-sdcard.zip $IMG
     
     - name: Create ZIP packages (alternative to images)
       run: |
