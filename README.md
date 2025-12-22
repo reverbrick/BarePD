@@ -2,7 +2,7 @@
 
 **Bare Metal Pure Data for Raspberry Pi**
 
-*Created by Daniel Górny — [PlayableElectronics](https://playableelectronics.com)*
+*Created by Daniel Górny — [PlayableElectronics](https://rlrl.pl/)*
 
 BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi hardware without any operating system. This enables ultra-low latency audio synthesis with deterministic timing - perfect for embedded musical instruments, synthesizers, and audio installations.
 
@@ -331,7 +331,7 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Author
 
-**Daniel Górny** — [PlayableElectronics](https://playableelectronics.com)
+**Daniel Górny** — [PlayableElectronics](https://rlrl.pl/)
 
 ## Credits
 
