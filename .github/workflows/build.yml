@@ -132,35 +132,175 @@ jobs:
         name: barepd-zerow-kernel
         path: release/zerow
     
-    - name: Prepare release packages
+    - name: Download Raspberry Pi firmware
+      run: |
+        # Download required boot files from official RPi firmware repo
+        mkdir -p firmware
+        cd firmware
+        
+        # Essential boot files for all Pi models
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/bootcode.bin
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/start.elf
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/fixup.dat
+        
+        # Additional files for better compatibility
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/start_x.elf
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/fixup_x.dat
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/start_cd.elf
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/fixup_cd.dat
+        
+        # BCM2710 device tree for RPi 3B
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/bcm2710-rpi-3-b.dtb
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/bcm2710-rpi-3-b-plus.dtb
+        
+        # BCM2708 device tree for RPi Zero W
+        wget -q https://github.com/raspberrypi/firmware/raw/master/boot/bcm2708-rpi-zero-w.dtb
+        
+        ls -la
+    
+    - name: Install tools for image creation
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mtools dosfstools
+    
+    - name: Create example patch
+      run: |
+        mkdir -p patches
+        cat > patches/main.pd << 'EOF'
+        #N canvas 0 0 600 400 10;
+        #X obj 50 50 osc~ 440;
+        #X obj 50 100 *~ 0.1;
+        #X obj 50 150 dac~;
+        #X text 50 20 BarePD - Simple 440Hz test tone;
+        #X text 200 50 Replace this file with your own patch!;
+        #X connect 0 0 1 0;
+        #X connect 1 0 2 0;
+        #X connect 1 0 2 1;
+        EOF
+    
+    - name: Create RPi 3B SD card image
+      run: |
+        # Create 64MB FAT32 image (plenty of room for patches)
+        dd if=/dev/zero of=BarePD-${{ github.ref_name }}-rpi3b.img bs=1M count=64
+        
+        # Create FAT32 filesystem
+        mkfs.vfat -F 32 -n BAREPD BarePD-${{ github.ref_name }}-rpi3b.img
+        
+        # Copy files using mtools
+        # Firmware files
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bootcode.bin ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/start.elf ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/fixup.dat ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/start_x.elf ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/fixup_x.dat ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bcm2710-rpi-3-b.dtb ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img firmware/bcm2710-rpi-3-b-plus.dtb ::
+        
+        # BarePD kernel
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img release/rpi3b/kernel8-32.img ::
+        
+        # Config files
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img sdcard/config.txt ::
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img sdcard/cmdline.txt ::
+        
+        # Example patch
+        mcopy -i BarePD-${{ github.ref_name }}-rpi3b.img patches/main.pd ::
+        
+        # Show contents
+        mdir -i BarePD-${{ github.ref_name }}-rpi3b.img
+        
+        # Compress the image
+        zip BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip BarePD-${{ github.ref_name }}-rpi3b.img
+    
+    - name: Create RPi Zero W SD card image
+      run: |
+        # Create 64MB FAT32 image
+        dd if=/dev/zero of=BarePD-${{ github.ref_name }}-zerow.img bs=1M count=64
+        
+        # Create FAT32 filesystem
+        mkfs.vfat -F 32 -n BAREPD BarePD-${{ github.ref_name }}-zerow.img
+        
+        # Copy files using mtools
+        # Firmware files
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/bootcode.bin ::
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/start.elf ::
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/fixup.dat ::
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/start_cd.elf ::
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/fixup_cd.dat ::
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img firmware/bcm2708-rpi-zero-w.dtb ::
+        
+        # BarePD kernel
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img release/zerow/kernel.img ::
+        
+        # Config files (use zerow config, renamed to config.txt)
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img sdcard/config-zerow.txt ::config.txt
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img sdcard/cmdline.txt ::
+        
+        # Example patch
+        mcopy -i BarePD-${{ github.ref_name }}-zerow.img patches/main.pd ::
+        
+        # Show contents
+        mdir -i BarePD-${{ github.ref_name }}-zerow.img
+        
+        # Compress the image
+        zip BarePD-${{ github.ref_name }}-zerow-sdcard.zip BarePD-${{ github.ref_name }}-zerow.img
+    
+    - name: Create ZIP packages (alternative to images)
       run: |
         # Create RPi 3B package
         mkdir -p pkg-rpi3b
+        cp firmware/bootcode.bin pkg-rpi3b/
+        cp firmware/start.elf pkg-rpi3b/
+        cp firmware/fixup.dat pkg-rpi3b/
+        cp firmware/bcm2710-rpi-3-b.dtb pkg-rpi3b/
+        cp firmware/bcm2710-rpi-3-b-plus.dtb pkg-rpi3b/
         cp release/rpi3b/kernel8-32.img pkg-rpi3b/
         cp sdcard/config.txt pkg-rpi3b/
         cp sdcard/cmdline.txt pkg-rpi3b/
-        cp patches/*.pd pkg-rpi3b/ 2>/dev/null || true
-        echo "# BarePD for Raspberry Pi 3B/3B+" > pkg-rpi3b/README.txt
-        echo "" >> pkg-rpi3b/README.txt
-        echo "Copy all files to a FAT32 SD card along with:" >> pkg-rpi3b/README.txt
-        echo "- bootcode.bin, start.elf, fixup.dat from https://github.com/raspberrypi/firmware/tree/master/boot" >> pkg-rpi3b/README.txt
-        echo "- Your main.pd patch file" >> pkg-rpi3b/README.txt
-        cd pkg-rpi3b && zip -r ../BarePD-${{ github.ref_name }}-rpi3b.zip . && cd ..
+        cp patches/main.pd pkg-rpi3b/
+        cat > pkg-rpi3b/README.txt << 'EOF'
+        BarePD for Raspberry Pi 3B/3B+
+        ==============================
+        
+        Copy ALL files to a FAT32 formatted SD card.
+        Replace main.pd with your own Pure Data patch.
+        
+        For I2S audio (PCM5102A DAC):
+        - Edit config.txt and uncomment: dtparam=i2s=on
+        - Edit cmdline.txt and change: audio=i2s
+        
+        More info: https://github.com/reverbrick/BarePD
+        EOF
+        cd pkg-rpi3b && zip -r ../BarePD-${{ github.ref_name }}-rpi3b-files.zip . && cd ..
         
         # Create Zero W package
         mkdir -p pkg-zerow
+        cp firmware/bootcode.bin pkg-zerow/
+        cp firmware/start.elf pkg-zerow/
+        cp firmware/fixup.dat pkg-zerow/
+        cp firmware/bcm2708-rpi-zero-w.dtb pkg-zerow/
         cp release/zerow/kernel.img pkg-zerow/
         cp sdcard/config-zerow.txt pkg-zerow/config.txt
         cp sdcard/cmdline.txt pkg-zerow/
-        cp patches/*.pd pkg-zerow/ 2>/dev/null || true
-        echo "# BarePD for Raspberry Pi Zero W" > pkg-zerow/README.txt
-        echo "" >> pkg-zerow/README.txt
-        echo "Copy all files to a FAT32 SD card along with:" >> pkg-zerow/README.txt
-        echo "- bootcode.bin, start.elf, fixup.dat from https://github.com/raspberrypi/firmware/tree/master/boot" >> pkg-zerow/README.txt
-        echo "- Your main.pd patch file" >> pkg-zerow/README.txt
-        cd pkg-zerow && zip -r ../BarePD-${{ github.ref_name }}-zerow.zip . && cd ..
+        cp patches/main.pd pkg-zerow/
+        cat > pkg-zerow/README.txt << 'EOF'
+        BarePD for Raspberry Pi Zero W
+        ==============================
         
-        # List packages
+        Copy ALL files to a FAT32 formatted SD card.
+        Replace main.pd with your own Pure Data patch.
+        
+        For I2S audio (PCM5102A DAC):
+        - Edit config.txt and uncomment: dtparam=i2s=on
+        - Edit cmdline.txt and change: audio=i2s
+        
+        Note: Zero W is single-core - keep patches simple!
+        
+        More info: https://github.com/reverbrick/BarePD
+        EOF
+        cd pkg-zerow && zip -r ../BarePD-${{ github.ref_name }}-zerow-files.zip . && cd ..
+        
+        # List all packages
         ls -la *.zip
     
     - name: Create GitHub Release
@@ -170,6 +310,32 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
+        body: |
+          ## Downloads
+          
+          ### 🖼️ SD Card Images (Recommended)
+          Flash directly to SD card using [Balena Etcher](https://etcher.balena.io/) or Raspberry Pi Imager:
+          - **RPi 3B/3B+**: `BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip`
+          - **RPi Zero W**: `BarePD-${{ github.ref_name }}-zerow-sdcard.zip`
+          
+          ### 📁 File Packages
+          Copy contents to a FAT32 SD card:
+          - **RPi 3B/3B+**: `BarePD-${{ github.ref_name }}-rpi3b-files.zip`
+          - **RPi Zero W**: `BarePD-${{ github.ref_name }}-zerow-files.zip`
+          
+          ## Quick Start
+          1. Download the SD card image for your Pi model
+          2. Extract the `.img` file from the ZIP
+          3. Flash to SD card with Balena Etcher
+          4. Replace `main.pd` with your Pure Data patch
+          5. Insert SD card and power on!
+          
+          ## Audio Output
+          - **PWM** (default): 3.5mm headphone jack
+          - **I2S**: PCM5102A DAC module (edit config.txt)
+          
         files: |
-          BarePD-${{ github.ref_name }}-rpi3b.zip
-          BarePD-${{ github.ref_name }}-zerow.zip
+          BarePD-${{ github.ref_name }}-rpi3b-sdcard.zip
+          BarePD-${{ github.ref_name }}-zerow-sdcard.zip
+          BarePD-${{ github.ref_name }}-rpi3b-files.zip
+          BarePD-${{ github.ref_name }}-zerow-files.zip
