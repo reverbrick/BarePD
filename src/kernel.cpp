@@ -11,6 +11,7 @@
 #include <circle/machineinfo.h>
 #include <circle/util.h>
 #include <assert.h>
+#include <cstdlib>
 
 // libpd includes
 extern "C" {
