@@ -49,18 +49,28 @@ jobs:
     
     - name: Show build result
       run: |
-        ls -la src/kernel8-32.img src/kernel8-32.lst src/kernel8-32.map 2>/dev/null || true
+        echo "=== Build outputs ==="
+        ls -la src/kernel8-32.* || echo "No kernel files found"
+        ls -la src/*.elf src/*.lst src/*.map 2>/dev/null || echo "No debug files"
         file src/kernel8-32.img
     
     - name: Upload kernel artifact
       uses: actions/upload-artifact@v4
       with:
         name: barepd-rpi3b-kernel
+        path: src/kernel8-32.img
+        retention-days: 30
+    
+    - name: Upload debug files
+      uses: actions/upload-artifact@v4
+      with:
+        name: barepd-rpi3b-debug
         path: |
-          src/kernel8-32.img
           src/kernel8-32.lst
           src/kernel8-32.map
+          src/kernel8-32.elf
         retention-days: 30
+        if-no-files-found: warn
 
   build-zerow:
     name: Build for Raspberry Pi Zero W
