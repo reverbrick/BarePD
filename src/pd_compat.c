@@ -18,15 +18,23 @@
 
 /* Newlib system call stubs - these are called by newlib's libc */
 
-/* Use Circle's memory allocator instead of newlib's malloc.
- * Circle's malloc is in libcircle.a and works properly in bare metal.
- * We just need to provide _sbrk as a stub since newlib might still reference it.
+/* _sbrk - increase program data space for malloc
+ * Note: Circle also provides malloc in libcircle.a
+ * This is used by newlib's malloc if it gets linked
  */
+extern char _end;  /* Defined by linker - end of BSS */
+static char *heap_end = 0;
 
 void *_sbrk(ptrdiff_t incr) {
-    (void)incr;
-    /* Return error - we want Circle's malloc to be used, not newlib's */
-    return (void *)-1;
+    char *prev_heap_end;
+    
+    if (heap_end == 0) {
+        heap_end = &_end;
+    }
+    prev_heap_end = heap_end;
+    heap_end += incr;
+    
+    return (void *)prev_heap_end;
 }
 
 /* _write - write to a file descriptor */

@@ -289,36 +289,18 @@ TShutdownMode CKernel::Run (void)
 	// Parse configuration
 	ParseConfig ();
 
-	// Ensure VFP/NEON is properly configured - disable exception trapping
-	m_Logger.Write (FromKernel, LogNotice, "Configuring FPU...");
-	{
-		// Read FPEXC and ensure EX bit is clear, EN bit is set
-		unsigned int fpexc;
-		asm volatile ("fmrx %0, fpexc" : "=r" (fpexc));
-		m_Logger.Write (FromKernel, LogDebug, "FPEXC before: 0x%08X", fpexc);
-		
-		// Set EN bit (enable VFP), clear EX bit (no exception pending)
-		fpexc = (fpexc | (1 << 30)) & ~(1 << 31);  // EN=1, EX=0
-		asm volatile ("fmxr fpexc, %0" : : "r" (fpexc));
-		
-		asm volatile ("fmrx %0, fpexc" : "=r" (fpexc));
-		m_Logger.Write (FromKernel, LogDebug, "FPEXC after: 0x%08X", fpexc);
-		
-		// Also configure FPSCR to not trap on exceptions
-		unsigned int fpscr;
-		asm volatile ("fmrx %0, fpscr" : "=r" (fpscr));
-		m_Logger.Write (FromKernel, LogDebug, "FPSCR before: 0x%08X", fpscr);
-		
-		// Clear exception trap enable bits (bits 8-12), enable flush-to-zero and default NaN
-		fpscr = (fpscr & ~0x1F00) | (1 << 24) | (1 << 25);  // FZ=1, DN=1, no traps
-		asm volatile ("fmxr fpscr, %0" : : "r" (fpscr));
-		
-		asm volatile ("fmrx %0, fpscr" : "=r" (fpscr));
-		m_Logger.Write (FromKernel, LogDebug, "FPSCR after: 0x%08X", fpscr);
+	// Debug: dump memory at known crash location to check for corruption
+	// The crash was at PC 0x66208 - let's see what's actually there
+	m_Logger.Write (FromKernel, LogDebug, "Memory check at class_addmethod area:");
+	volatile unsigned int *crashAddr = (volatile unsigned int *)0x66200;
+	for (int i = 0; i < 8; i++) {
+		m_Logger.Write (FromKernel, LogDebug, "  0x%05X: 0x%08X", 
+		                0x66200 + i*4, crashAddr[i]);
 	}
-	m_Timer.MsDelay(50);
+	m_Timer.MsDelay(100);
 	
 	// Initialize libpd
+	// Note: Circle already initializes VFP in sysinit.cpp with flush-to-zero and default NaN
 	m_Logger.Write (FromKernel, LogNotice, "Initializing libpd...");
 	
 	m_Logger.Write (FromKernel, LogDebug, "Setting up libpd hooks...");
