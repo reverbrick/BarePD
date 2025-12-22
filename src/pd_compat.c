@@ -109,7 +109,7 @@ sighandler_t signal(int signum, sighandler_t handler) {
     return SIG_DFL;  /* Just return default, do nothing */
 }
 
-int sigaction(int signum, const void *act, void *oldact) {
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
     (void)signum;
     (void)act;
     (void)oldact;
