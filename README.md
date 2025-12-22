@@ -20,9 +20,10 @@ BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi
 
 ## Supported Hardware
 
-- **Raspberry Pi 3B/3B+** (primary target, 32-bit)
+- **Raspberry Pi 3B/3B+** (primary target, 32-bit) → `kernel8-32.img`
+- **Raspberry Pi Zero W** (single-core, tested) → `kernel.img`
+- Raspberry Pi Zero 2 W (should work with `kernel8-32.img`, untested)
 - Raspberry Pi 4 (planned)
-- Raspberry Pi Zero 2 W (planned)
 
 ## Quick Start
 
@@ -135,6 +136,8 @@ tar -xf arm-toolchain.tar.xz
 
 ### Configure and Build
 
+#### For Raspberry Pi 3B/3B+ (recommended)
+
 ```bash
 # Configure Circle for RPi 3B
 cd circle
@@ -152,7 +155,30 @@ cd ../src
 make
 ```
 
-The kernel image will be at `src/kernel8-32.img`.
+Output: `src/kernel8-32.img`
+
+#### For Raspberry Pi Zero W
+
+```bash
+# Configure Circle for RPi Zero W (RASPPI=1)
+cd circle
+./configure -r 1 -p ../arm-gnu-toolchain-13.2.Rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-
+
+# Add stdlib support
+echo "STDLIB_SUPPORT = 3" >> Config.mk
+
+# Build Circle libraries
+./makeall
+cd addon/SDCard && make && cd ../..
+
+# Build BarePD
+cd ../src
+make
+```
+
+Output: `src/kernel.img`
+
+**Note:** Zero W is single-core and slower than RPi 3B. Complex patches may have higher CPU usage.
 
 ## Configuration Reference
 
@@ -168,8 +194,11 @@ The kernel image will be at `src/kernel8-32.img`.
 ```ini
 # Required settings
 arm_64bit=0
-kernel=kernel8-32.img
 dtparam=audio=on
+
+# Kernel selection (choose one based on your Pi model):
+kernel=kernel8-32.img    # For RPi 3B/3B+, Zero 2 W
+# kernel=kernel.img      # For RPi Zero W
 
 # For I2S DAC (PCM5102A)
 dtparam=i2s=on

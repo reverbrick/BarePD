@@ -1,0 +1,45 @@
+#
+# BarePD configuration for Raspberry Pi Zero W
+#
+
+# Force 32-bit mode
+arm_64bit=0
+
+# Use Zero W kernel
+kernel=kernel.img
+
+# Enable audio
+dtparam=audio=on
+
+# Initial turbo for faster boot
+initial_turbo=1
+
+# Disable overscan
+disable_overscan=1
+
+# GPU memory (more for CPU/audio processing)
+gpu_mem=64
+
+# ============================================
+# I2S DAC Configuration (PCM5102A)
+# ============================================
+# Uncomment to use I2S output:
+#dtparam=i2s=on
+
+# PCM5102A GPIO connections:
+#   BCK  -> GPIO 18 (Pin 12) - Bit clock
+#   LRCK -> GPIO 19 (Pin 35) - Word clock / LR clock  
+#   DIN  -> GPIO 21 (Pin 40) - Data
+#   VIN  -> 3.3V
+#   GND  -> GND
+#   FMT  -> GND (I2S mode)
+#   XSMT -> 3.3V (unmute)
+
+# ============================================
+# Performance Notes for Zero W
+# ============================================
+# Zero W has a single ARM1176JZF-S core at 1GHz
+# - Keep patches simple for reliable audio
+# - Use lower sample rates (44100Hz) if needed
+# - Avoid excessive CPU-heavy Pd objects
+
