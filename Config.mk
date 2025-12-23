@@ -4,7 +4,9 @@
 
 RASPPI = 3
 AARCH = 32
-PREFIX = arm-none-eabi-
+
+# Use ARM's official toolchain (GCC 13.2) - Homebrew's GCC 15 breaks bare-metal
+PREFIX = /Users/daniel/Documents/BarePD/arm-gnu-toolchain-13.2.Rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-
 
 # Enable standard library support
 STDLIB_SUPPORT = 3

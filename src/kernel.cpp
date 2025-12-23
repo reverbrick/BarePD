@@ -26,7 +26,6 @@ CKernel *CKernel::s_pThis = nullptr;
 // Simple log buffer for SD card logging
 static char s_LogBuffer[LOG_BUFFER_SIZE];
 static unsigned s_nLogOffset = 0;
-static bool s_bLogReady = false;
 
 static void LogToBuffer(const char *pSource, const char *pMessage)
 {
@@ -190,8 +189,7 @@ boolean CKernel::LoadPatch (const char *pPatchName)
 	m_Logger.Write (FromKernel, LogNotice, "Loading patch: %s", pPatchName);
 	LogToBuffer(FromKernel, "Loading patch...");
 
-	// libpd will use our file I/O bridge (pd_fileio) to read the file
-	// Pass "." as directory - libpd expects filename and directory separately
+	// libpd expects filename and directory separately
 	const char *pDirectory = ".";
 	
 	// Find the filename part (after last '/')
@@ -206,7 +204,7 @@ boolean CKernel::LoadPatch (const char *pPatchName)
 
 	m_Logger.Write (FromKernel, LogDebug, "Opening patch: dir='%s' file='%s'", pDirectory, pFilename);
 	
-	// Open the patch in libpd (this will use our _open/_read/_close stubs)
+	// Open the patch in libpd (this will use newlib fopen -> _open)
 	m_pPatch = libpd_openfile (pFilename, pDirectory);
 	
 	if (m_pPatch == nullptr)
@@ -301,9 +299,23 @@ TShutdownMode CKernel::Run (void)
 	m_Logger.Write (FromKernel, LogNotice, "SD card mounted successfully");
 	LogToBuffer(FromKernel, "SD card mounted successfully");
 	
+	// Write early debug marker
+	unsigned hDebug = m_FileSystem.FileCreate("DEBUG1.TXT");
+	if (hDebug) {
+		m_FileSystem.FileWrite(hDebug, "Mounted OK\n", 11);
+		m_FileSystem.FileClose(hDebug);
+	}
+	
 	// Initialize file I/O bridge for libpd
 	pd_fileio_init(&m_FileSystem);
 	LogToBuffer(FromKernel, "File I/O initialized");
+	
+	// Write second debug marker
+	hDebug = m_FileSystem.FileCreate("DEBUG2.TXT");
+	if (hDebug) {
+		m_FileSystem.FileWrite(hDebug, "FileIO skipped\n", 15);
+		m_FileSystem.FileClose(hDebug);
+	}
 
 	// Parse configuration
 	ParseConfig ();

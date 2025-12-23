@@ -115,6 +115,7 @@ CFLAGS_LIBPD = \
 	-DLIBPD_NO_NUMERIC \
 	-DLITTLE_ENDIAN=1234 \
 	-DBYTE_ORDER=1234 \
+	-DBAREPD \
 	-fno-short-enums \
 	-mthumb \
 	-mthumb-interwork \

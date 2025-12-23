@@ -455,6 +455,11 @@ FILE *sys_fopen(const char *filename, const char *mode)
 #include <stdarg.h>
 int sys_open(const char *path, int oflag, ...)
 {
+#ifdef BAREPD
+    /* BarePD: Use custom file I/O bridge to Circle's FAT filesystem */
+    extern int barepd_open(const char *path, int oflag);
+    return barepd_open(path, oflag);
+#else
     int i, fd;
     char pathbuf[MAXPDSTRING];
     sys_bashfilename(path, pathbuf);
@@ -480,13 +485,20 @@ int sys_open(const char *path, int oflag, ...)
     else
         fd = open(pathbuf, oflag);
     return fd;
+#endif
 }
 
 FILE *sys_fopen(const char *filename, const char *mode)
 {
+#ifdef BAREPD
+  /* BarePD: Use custom file I/O bridge to Circle's FAT filesystem */
+  extern FILE *barepd_fopen(const char *filename, const char *mode);
+  return barepd_fopen(filename, mode);
+#else
   char namebuf[MAXPDSTRING];
   sys_bashfilename(filename, namebuf);
   return fopen(namebuf, mode);
+#endif
 }
 #endif /* _WIN32 */
 

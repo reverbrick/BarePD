@@ -50,26 +50,19 @@ int _write(int fd, const void *buf, size_t count) {
 
 /* _read - read from a file descriptor using Circle's filesystem */
 int _read(int fd, void *buf, size_t count) {
-    /* fd 0,1,2 are stdin/stdout/stderr */
-    if (fd < 3) {
-        return 0;  /* EOF for stdin */
-    }
+    if (fd < 3) return 0;  /* EOF for stdin */
     return pd_fileio_read(fd, buf, count);
 }
 
 /* _close - close a file descriptor */
 int _close(int fd) {
-    if (fd < 3) {
-        return 0;  /* Can't close stdin/stdout/stderr */
-    }
+    if (fd < 3) return 0;
     return pd_fileio_close(fd);
 }
 
 /* _lseek - reposition read/write file offset */
 off_t _lseek(int fd, off_t offset, int whence) {
-    if (fd < 3) {
-        return -1;
-    }
+    if (fd < 3) return -1;
     return pd_fileio_lseek(fd, offset, whence);
 }
 

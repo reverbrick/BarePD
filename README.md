@@ -1,10 +1,12 @@
 # BarePD
 
-**Bare Metal Pure Data for Raspberry Pi**
+**Bare Metal Pure Data for Raspberry Pi** ✅ *Working!*
 
 *Created by Daniel Górny — [PlayableElectronics](https://rlrl.pl/)*
 
 BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi hardware without any operating system. This enables ultra-low latency audio synthesis with deterministic timing - perfect for embedded musical instruments, synthesizers, and audio installations.
+
+> **Status:** Tested and working on Raspberry Pi 3B+ with PWM audio output (3.5mm jack). Patches load from SD card and play!
 
 ## Features
 

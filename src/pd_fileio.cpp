@@ -4,6 +4,9 @@
 // BarePD - File I/O bridge between libpd (C) and Circle filesystem (C++)
 // Copyright (C) 2024 Daniel Górny <PlayableElectronics>
 //
+// This provides the file I/O layer that allows libpd to read patch files
+// from the SD card using Circle's FAT filesystem.
+//
 // Licensed under GPLv3
 //
 
@@ -11,28 +14,40 @@
 #include <circle/fs/fat/fatfs.h>
 #include <circle/logger.h>
 #include <circle/util.h>
-
-// Avoid including sys/stat.h to prevent time_t conflict with Circle
-// Define just what we need
-#ifndef S_IFREG
-#define S_IFREG 0100000
-#endif
+#include <stdio.h>
 
 static const char FromFileIO[] = "fileio";
 
-// Simple file handle table
+// File handle table
 #define MAX_OPEN_FILES 8
-#define FD_OFFSET 10  // Start file descriptors at 10 to avoid conflicts with stdin/stdout/stderr
+#define FD_OFFSET 10  // Start file descriptors at 10 to avoid stdin/stdout/stderr
 
 struct FileEntry {
     unsigned hFile;      // Circle file handle (0 = unused)
-    unsigned nBytesRead; // Total bytes read (for tracking position)
-    bool bEOF;           // End of file reached
+    unsigned nPosition;  // Current read position
+    unsigned nSize;      // File size (cached on open for SEEK_END support)
     bool bValid;
 };
 
 static CFATFileSystem *s_pFileSystem = nullptr;
 static FileEntry s_FileTable[MAX_OPEN_FILES];
+
+// Helper: normalize path by removing leading "./" or "/"
+static const char *NormalizePath(const char *path)
+{
+    if (path[0] == '.' && path[1] == '/') return path + 2;
+    if (path[0] == '/') return path + 1;
+    return path;
+}
+
+// Helper: find free slot in file table
+static int FindFreeSlot(void)
+{
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        if (!s_FileTable[i].bValid) return i;
+    }
+    return -1;
+}
 
 extern "C" {
 
@@ -40,60 +55,73 @@ void pd_fileio_init(void *pFileSystem)
 {
     s_pFileSystem = static_cast<CFATFileSystem*>(pFileSystem);
     
-    // Clear file table
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         s_FileTable[i].hFile = 0;
         s_FileTable[i].bValid = false;
     }
     
-    if (s_pFileSystem) {
-        CLogger::Get()->Write(FromFileIO, LogNotice, "File I/O bridge initialized");
-    }
+    CLogger::Get()->Write(FromFileIO, LogDebug, "File I/O initialized");
 }
 
-int pd_fileio_open(const char *path, int flags)
+// Called by patched sys_fopen in libpd (not used for patch loading)
+FILE *barepd_fopen(const char *filename, const char *mode)
 {
-    (void)flags;  // We only support read-only for now
+    (void)filename; (void)mode;
+    return nullptr;  // Patch loading uses barepd_open via sys_open
+}
+
+// Called by patched sys_open in libpd - this is the main entry point for patch loading
+int barepd_open(const char *path, int oflag)
+{
+    (void)oflag;  // We only support read-only
     
     if (!s_pFileSystem || !path) {
         return -1;
     }
     
-    // Find a free slot
-    int slot = -1;
-    for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (!s_FileTable[i].bValid) {
-            slot = i;
-            break;
-        }
-    }
+    const char *pName = NormalizePath(path);
     
+    int slot = FindFreeSlot();
     if (slot < 0) {
         CLogger::Get()->Write(FromFileIO, LogError, "Too many open files");
         return -1;
     }
     
-    // Skip leading slash or dot-slash if present
-    const char *pName = path;
-    if (pName[0] == '/') pName++;
-    if (pName[0] == '.' && pName[1] == '/') pName += 2;
-    
-    // Open the file
+    // Open file and determine size by reading through it
     unsigned hFile = s_pFileSystem->FileOpen(pName);
     if (hFile == 0) {
         CLogger::Get()->Write(FromFileIO, LogWarning, "Cannot open: %s", pName);
         return -1;
     }
     
-    // Store in table
+    // Get file size (Circle FAT doesn't expose size directly, so read through)
+    unsigned nSize = 0;
+    char tempBuf[512];
+    unsigned nRead;
+    while ((nRead = s_pFileSystem->FileRead(hFile, tempBuf, sizeof(tempBuf))) > 0 
+           && nRead != FS_ERROR) {
+        nSize += nRead;
+    }
+    s_pFileSystem->FileClose(hFile);
+    
+    // Reopen for actual reading
+    hFile = s_pFileSystem->FileOpen(pName);
+    if (hFile == 0) {
+        return -1;
+    }
+    
     s_FileTable[slot].hFile = hFile;
-    s_FileTable[slot].nBytesRead = 0;
-    s_FileTable[slot].bEOF = false;
+    s_FileTable[slot].nPosition = 0;
+    s_FileTable[slot].nSize = nSize;
     s_FileTable[slot].bValid = true;
     
-    CLogger::Get()->Write(FromFileIO, LogNotice, "Opened: %s (fd=%d)", pName, slot + FD_OFFSET);
-    
+    CLogger::Get()->Write(FromFileIO, LogDebug, "Opened: %s (%u bytes)", pName, nSize);
     return slot + FD_OFFSET;
+}
+
+int pd_fileio_open(const char *path, int flags)
+{
+    return barepd_open(path, flags);
 }
 
 int pd_fileio_close(int fd)
@@ -108,12 +136,8 @@ int pd_fileio_close(int fd)
         s_pFileSystem->FileClose(s_FileTable[slot].hFile);
     }
     
-    CLogger::Get()->Write(FromFileIO, LogDebug, "Closed fd=%d (read %u bytes)", 
-                          fd, s_FileTable[slot].nBytesRead);
-    
     s_FileTable[slot].hFile = 0;
     s_FileTable[slot].bValid = false;
-    
     return 0;
 }
 
@@ -129,23 +153,13 @@ int pd_fileio_read(int fd, void *buf, unsigned int count)
         return -1;
     }
     
-    FileEntry *pEntry = &s_FileTable[slot];
+    unsigned nRead = s_pFileSystem->FileRead(s_FileTable[slot].hFile, buf, count);
     
-    // Check if we've already hit EOF
-    if (pEntry->bEOF) {
-        return 0;
-    }
-    
-    // Read data
-    unsigned nRead = s_pFileSystem->FileRead(pEntry->hFile, buf, count);
-    
-    if (nRead == 0 || nRead == 0xFFFFFFFF) {
-        pEntry->bEOF = true;
+    if (nRead == 0 || nRead == FS_ERROR) {
         return 0;  // EOF
     }
     
-    pEntry->nBytesRead += nRead;
-    
+    s_FileTable[slot].nPosition += nRead;
     return (int)nRead;
 }
 
@@ -157,16 +171,24 @@ int pd_fileio_lseek(int fd, int offset, int whence)
         return -1;
     }
     
-    // Circle's FAT filesystem doesn't support seeking
-    // For SEEK_SET to 0, we could close and reopen, but that's complex
-    // Return current position for now (limited functionality)
+    FileEntry *pEntry = &s_FileTable[slot];
     
-    if (whence == 0 && offset == 0) {
-        // SEEK_SET to beginning - would need to reopen file
-        CLogger::Get()->Write(FromFileIO, LogWarning, "lseek to start not supported");
+    switch (whence) {
+        case 0:  // SEEK_SET
+            pEntry->nPosition = (unsigned)offset;
+            return offset;
+            
+        case 1:  // SEEK_CUR
+            pEntry->nPosition += offset;
+            return (int)pEntry->nPosition;
+            
+        case 2:  // SEEK_END
+            pEntry->nPosition = pEntry->nSize + offset;
+            return (int)pEntry->nPosition;
+            
+        default:
+            return -1;
     }
-    
-    return (int)s_FileTable[slot].nBytesRead;
 }
 
 int pd_fileio_stat(const char *path, void *statbuf)
@@ -175,33 +197,23 @@ int pd_fileio_stat(const char *path, void *statbuf)
         return -1;
     }
     
-    // Skip leading slash or dot-slash
-    const char *pName = path;
-    if (pName[0] == '/') pName++;
-    if (pName[0] == '.' && pName[1] == '/') pName += 2;
+    const char *pName = NormalizePath(path);
     
-    // Try to open to check existence
+    // Check existence by trying to open
     unsigned hFile = s_pFileSystem->FileOpen(pName);
     if (hFile == 0) {
-        return -1;  // File doesn't exist
+        return -1;
     }
-    
     s_pFileSystem->FileClose(hFile);
     
-    // Fill in minimal stat info - just zero it and set mode
-    // We don't use the full struct stat to avoid header conflicts
+    // Fill minimal stat info
     if (statbuf) {
-        // Zero the buffer (struct stat is typically ~100 bytes)
         memset(statbuf, 0, 128);
-        // st_mode is typically at offset 4 or 8 in struct stat
-        // Set it to regular file (S_IFREG | permissions)
-        // This is a hack but should work for libpd's needs
         unsigned *pMode = (unsigned *)((char *)statbuf + 4);
-        *pMode = S_IFREG | 0644;
+        *pMode = 0100000 | 0644;  // S_IFREG | rw-r--r--
     }
     
     return 0;
 }
 
 }  // extern "C"
-
