@@ -26,19 +26,19 @@ CKernel *CKernel::s_pThis = nullptr;
 
 CKernel::CKernel (void)
 :	m_Screen (m_Options.GetWidth (), m_Options.GetHeight ()),
-	m_Serial (&m_Interrupt, TRUE),  // Use FIQ for serial
+	m_Serial (&m_Interrupt, TRUE),  // FIQ mode for RX buffering
 	m_Timer (&m_Interrupt),
 	m_Logger (m_Options.GetLogLevel (), &m_Timer),
 	m_USBHCI (&m_Interrupt, &m_Timer, TRUE),
 	m_I2CMaster (CMachineInfo::Get ()->GetDevice (DeviceI2CMaster), TRUE),
 	m_EMMC (&m_Interrupt, &m_Timer, &m_ActLED),
-	m_AudioOutput (AudioOutputI2S),  // Default to I2S for PCM5102A
+	m_AudioOutput (AudioOutputI2S),
 	m_nSampleRate (DEFAULT_SAMPLE_RATE_HZ),
 	m_bHeadless (FALSE),
 	m_pSoundDevice (nullptr),
 	m_pI2SDevice (nullptr),
 	m_pMIDIDevice (nullptr),
-	m_bFudiEnabled (TRUE),  // FUDI over UART enabled by default
+	m_bFudiEnabled (TRUE),
 	m_pPatch (nullptr)
 {
 	s_pThis = this;
@@ -59,30 +59,30 @@ boolean CKernel::Initialize (void)
 	// Check for headless mode (skip video for lower latency)
 	m_bHeadless = m_Options.GetAppOptionDecimal ("headless", 0) != 0;
 
-	// Initialize interrupt system first (needed for serial with interrupts)
+	// Initialize interrupt system first (required for FIQ serial)
 	if (bOK)
 	{
 		bOK = m_Interrupt.Initialize ();
 	}
 
-	// Initialize serial (needed for FUDI and logging in headless mode)
-	if (bOK)
-	{
-		bOK = m_Serial.Initialize (115200);
-	}
-
-	// Only initialize screen if not headless
+	// Initialize screen (must be before serial per Circle samples)
 	if (bOK && !m_bHeadless)
 	{
 		bOK = m_Screen.Initialize ();
 	}
 
+	// Initialize serial for FUDI communication
+	if (bOK)
+	{
+		bOK = m_Serial.Initialize (115200);
+	}
+
+	// Initialize logger
 	if (bOK)
 	{
 		CDevice *pTarget = m_DeviceNameService.GetDevice (m_Options.GetLogDevice (), FALSE);
 		if (pTarget == nullptr)
 		{
-			// Use serial in headless mode, screen otherwise
 			pTarget = m_bHeadless ? (CDevice *)&m_Serial : (CDevice *)&m_Screen;
 		}
 		bOK = m_Logger.Initialize (pTarget);
@@ -107,10 +107,6 @@ boolean CKernel::Initialize (void)
 	{
 		bOK = m_EMMC.Initialize ();
 	}
-
-	// Note: USB CDC Gadget only works on Pi Zero/Zero W/4 (OTG capable)
-	// Pi 3B uses USB host mode for MIDI, so we use UART serial for FUDI
-	// USB CDC initialization disabled for Pi 3B compatibility
 
 	return bOK;
 }
@@ -532,6 +528,7 @@ void CKernel::ProcessFudiSerial (CDevice *pSerial)
 	
 	if (nRead > 0)
 	{
+		buffer[nRead] = '\0';
 		m_FudiParser.ProcessBuffer(buffer, nRead);
 	}
 }
@@ -541,9 +538,8 @@ void CKernel::FudiOutputHandler (const char *pMessage)
 	if (!s_pThis || !pMessage)
 		return;
 	
-	// Send FUDI output to UART serial (GPIO 14/15)
-	unsigned nLen = strlen(pMessage);
-	s_pThis->m_Serial.Write(pMessage, nLen);
+	// Send FUDI output to serial
+	s_pThis->m_Serial.Write(pMessage, strlen(pMessage));
 }
 
 // Pd hooks for FUDI output - these forward [send] messages to serial
