@@ -1,2 +1,2 @@
-audio=i2s samplerate=48000 headless=1
+audio=i2s samplerate=48000
 

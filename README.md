@@ -20,6 +20,7 @@ BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi
   - **USB Audio** - USB audio interfaces (planned)
 - 🚀 **Fast Boot** - Under 3 seconds to audio with optimized config
 - 👁️ **Headless Mode** - Disable video for maximum performance
+- 📡 **FUDI Remote Control** - Control patches via USB or UART serial
 - 🖥️ **Serial Console** - Debug output via UART
 
 ## Supported Hardware
@@ -141,6 +142,89 @@ Current optimized settings (~50ms latency):
 - Chunk size: 256 frames (~5ms)
 - No logging during audio processing
 
+## FUDI Remote Control
+
+BarePD supports the FUDI (Fast Universal Digital Interface) protocol for remote control via serial. This allows you to:
+- Control patch parameters from a computer
+- Build hardware controllers (Arduino, ESP32)
+- Create remote displays showing Pd output
+
+### Connection Options
+
+**USB Serial (Pi appears as /dev/ttyACM0 on host):**
+```bash
+# Linux/macOS
+screen /dev/ttyACM0 115200
+
+# Or use any serial terminal
+```
+
+**UART Serial (GPIO pins):**
+- TX: GPIO 14 (Pin 8)
+- RX: GPIO 15 (Pin 10)
+- Baud: 115200
+
+### FUDI Protocol
+
+Messages are ASCII text terminated by semicolon:
+
+```
+receiver value;
+```
+
+**Examples:**
+```bash
+# Send float to [r freq]
+freq 440;
+
+# Send bang to [r trigger]  
+trigger bang;
+
+# Send symbol to [r mode]
+mode sine;
+
+# Control DSP
+pd dsp 1;
+pd dsp 0;
+```
+
+### Bidirectional Communication
+
+Messages sent from Pd via `[s name]` are output as FUDI:
+
+```
+# In Pd patch:
+[s output]  <- sending 123 outputs: "output 123;"
+
+# Received on serial:
+output 123;
+```
+
+### Example Patch for FUDI
+
+```
+[r freq]     <- receives "freq 440;"
+|
+[osc~]
+|
+[*~]
+|        [r amp] <- receives "amp 0.5;"
+|        |
+|        [/ 100]
+|        |
+[*~      ]
+|
+[dac~]
+```
+
+### Disable FUDI
+
+If not needed, disable to save resources:
+
+```
+fudi=0
+```
+
 ## Configuration Reference
 
 ### cmdline.txt Options
@@ -150,6 +234,7 @@ Current optimized settings (~50ms latency):
 | `audio` | `i2s`, `pwm` | `i2s` | Audio output type |
 | `samplerate` | `44100`, `48000`, `96000` | `48000` | Sample rate in Hz |
 | `headless` | `0`, `1` | `0` | Disable video output |
+| `fudi` | `0`, `1` | `1` | Enable FUDI serial control |
 
 ### config.txt Options
 

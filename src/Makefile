@@ -100,7 +100,7 @@ PD_CORE_OBJS = \
 	pd_x_vexp_fun.o
 
 # All object files - OBJS is used by Circle's Rules.mk
-OBJS = main.o kernel.o pdsounddevice.o pd_compat.o pd_fileio.o \
+OBJS = main.o kernel.o pdsounddevice.o pd_compat.o pd_fileio.o pd_fudi.o \
        $(LIBPD_WRAPPER_OBJS) $(PD_CORE_OBJS)
 
 # Include paths
@@ -133,6 +133,7 @@ CFLAGS_LIBPD = \
 
 # Circle libraries to link (using Circle's native FAT fs)
 LIBS = $(CIRCLEHOME)/addon/SDCard/libsdcard.a \
+       $(CIRCLEHOME)/lib/usb/gadget/libusbgadget.a \
        $(CIRCLEHOME)/lib/usb/libusb.a \
        $(CIRCLEHOME)/lib/input/libinput.a \
        $(CIRCLEHOME)/lib/fs/fat/libfatfs.a \

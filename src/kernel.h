@@ -28,6 +28,7 @@
 #include <SDCard/emmc.h>
 
 #include "pdsounddevice.h"
+#include "pd_fudi.h"
 
 // Default patch filename
 #define DEFAULT_PATCH_NAME      "main.pd"
@@ -69,15 +70,25 @@ private:
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength);
 	static void USBDeviceRemovedHandler (CDevice *pDevice, void *pContext);
 
+	// FUDI processing
+	void ProcessFudi (void);
+	void ProcessFudiSerial (CDevice *pSerial);
+	static void FudiOutputHandler (const char *pMessage);
+	
+	// Pd message hooks for FUDI output
+	static void PdFloatHook (const char *recv, float x);
+	static void PdBangHook (const char *recv);
+	static void PdSymbolHook (const char *recv, const char *sym);
+
 private:
 	// Core Circle components
 	CActLED			m_ActLED;
 	CKernelOptions		m_Options;
 	CDeviceNameService	m_DeviceNameService;
-	CScreenDevice		m_Screen;
-	CSerialDevice		m_Serial;
 	CExceptionHandler	m_ExceptionHandler;
 	CInterruptSystem	m_Interrupt;
+	CScreenDevice		m_Screen;
+	CSerialDevice		m_Serial;
 	CTimer			m_Timer;
 	CLogger			m_Logger;
 	CScheduler		m_Scheduler;
@@ -101,6 +112,11 @@ private:
 
 	// USB MIDI
 	CUSBMIDIDevice		*m_pMIDIDevice;
+
+	// FUDI remote control (via UART serial - GPIO 14/15)
+	// Note: USB CDC Gadget not available on Pi 3B (no OTG support)
+	CFudiParser		m_FudiParser;		// FUDI protocol parser
+	boolean			m_bFudiEnabled;		// FUDI over serial enabled
 
 	// Loaded patch handle
 	void			*m_pPatch;

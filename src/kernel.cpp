@@ -26,6 +26,7 @@ CKernel *CKernel::s_pThis = nullptr;
 
 CKernel::CKernel (void)
 :	m_Screen (m_Options.GetWidth (), m_Options.GetHeight ()),
+	m_Serial (&m_Interrupt, TRUE),  // Use FIQ for serial
 	m_Timer (&m_Interrupt),
 	m_Logger (m_Options.GetLogLevel (), &m_Timer),
 	m_USBHCI (&m_Interrupt, &m_Timer, TRUE),
@@ -37,6 +38,7 @@ CKernel::CKernel (void)
 	m_pSoundDevice (nullptr),
 	m_pI2SDevice (nullptr),
 	m_pMIDIDevice (nullptr),
+	m_bFudiEnabled (TRUE),  // FUDI over UART enabled by default
 	m_pPatch (nullptr)
 {
 	s_pThis = this;
@@ -57,7 +59,13 @@ boolean CKernel::Initialize (void)
 	// Check for headless mode (skip video for lower latency)
 	m_bHeadless = m_Options.GetAppOptionDecimal ("headless", 0) != 0;
 
-	// Initialize serial first (always needed for logging in headless mode)
+	// Initialize interrupt system first (needed for serial with interrupts)
+	if (bOK)
+	{
+		bOK = m_Interrupt.Initialize ();
+	}
+
+	// Initialize serial (needed for FUDI and logging in headless mode)
 	if (bOK)
 	{
 		bOK = m_Serial.Initialize (115200);
@@ -82,11 +90,6 @@ boolean CKernel::Initialize (void)
 
 	if (bOK)
 	{
-		bOK = m_Interrupt.Initialize ();
-	}
-
-	if (bOK)
-	{
 		bOK = m_Timer.Initialize ();
 	}
 
@@ -104,6 +107,10 @@ boolean CKernel::Initialize (void)
 	{
 		bOK = m_EMMC.Initialize ();
 	}
+
+	// Note: USB CDC Gadget only works on Pi Zero/Zero W/4 (OTG capable)
+	// Pi 3B uses USB host mode for MIDI, so we use UART serial for FUDI
+	// USB CDC initialization disabled for Pi 3B compatibility
 
 	return bOK;
 }
@@ -123,8 +130,17 @@ void CKernel::ParseConfig (void)
 		m_nSampleRate = nRate;
 	}
 	
+	// Parse FUDI option (enabled by default)
+	// Format: fudi=0|1
+	m_bFudiEnabled = m_Options.GetAppOptionDecimal ("fudi", 1) != 0;
+	
 	m_Logger.Write (FromKernel, LogNotice, "Audio config: %s @ %u Hz",
 	                CAudioOutputFactory::GetTypeName (m_AudioOutput), m_nSampleRate);
+	
+	if (m_bFudiEnabled)
+	{
+		m_Logger.Write (FromKernel, LogNotice, "FUDI remote control: enabled (USB + UART)");
+	}
 }
 
 boolean CKernel::SetupAudio (void)
@@ -314,19 +330,16 @@ TShutdownMode CKernel::Run (void)
 	});
 
 	// Set up bang hook for [send] messages with bang
-	libpd_set_banghook ([](const char *recv) {
-		CLogger::Get()->Write("pd", LogDebug, "[bang] -> %s", recv);
-	});
+	// Also sends to FUDI output
+	libpd_set_banghook (PdBangHook);
 
 	// Set up float hook for [send] messages with floats
-	libpd_set_floathook ([](const char *recv, float x) {
-		CLogger::Get()->Write("pd", LogDebug, "[float] -> %s: %f", recv, (double)x);
-	});
+	// Also sends to FUDI output
+	libpd_set_floathook (PdFloatHook);
 
 	// Set up symbol hook for [send] messages with symbols
-	libpd_set_symbolhook ([](const char *recv, const char *sym) {
-		CLogger::Get()->Write("pd", LogDebug, "[symbol] -> %s: %s", recv, sym);
-	});
+	// Also sends to FUDI output
+	libpd_set_symbolhook (PdSymbolHook);
 
 	// Set up MIDI hooks for monitoring
 	libpd_set_noteonhook ([](int ch, int pitch, int vel) {
@@ -390,10 +403,17 @@ TShutdownMode CKernel::Run (void)
 	m_Logger.Write (FromKernel, LogNotice, "BarePD is running!");
 	m_Logger.Write (FromKernel, LogNotice, "Audio output: %s", CAudioOutputFactory::GetTypeName(m_AudioOutput));
 	m_Logger.Write (FromKernel, LogNotice, "Connect USB MIDI to send notes to the patch.");
+	if (m_bFudiEnabled)
+	{
+		m_Logger.Write (FromKernel, LogNotice, "FUDI: Connect via USB serial or UART (115200 baud)");
+		m_Logger.Write (FromKernel, LogNotice, "FUDI: Send commands like 'freq 440;' or 'trigger bang;'");
+		
+		// Set up FUDI output callback
+		m_FudiParser.SetOutputCallback(FudiOutputHandler);
+	}
 	m_Logger.Write (FromKernel, LogNotice, "");
 
 	// Main loop - optimized for lowest latency
-	// No logging or screen updates during audio processing
 	boolean bActive = TRUE;
 	while (bActive)
 	{
@@ -410,6 +430,12 @@ TShutdownMode CKernel::Run (void)
 		else
 		{
 			bActive = FALSE;
+		}
+		
+		// Process FUDI commands from serial
+		if (m_bFudiEnabled)
+		{
+			ProcessFudi();
 		}
 		
 		// Check for MIDI device (only when USB state changes)
@@ -482,5 +508,66 @@ void CKernel::USBDeviceRemovedHandler (CDevice *pDevice, void *pContext)
 	{
 		CLogger::Get()->Write(FromKernel, LogNotice, "USB MIDI device removed");
 		s_pThis->m_pMIDIDevice = nullptr;
+	}
+}
+
+// ============================================================================
+// FUDI Protocol Handling
+// ============================================================================
+
+void CKernel::ProcessFudi (void)
+{
+	// Note: USB CDC Gadget disabled on Pi 3B (no OTG support)
+	// FUDI commands are received via UART serial (GPIO 14/15)
+	ProcessFudiSerial(&m_Serial);
+}
+
+void CKernel::ProcessFudiSerial (CDevice *pSerial)
+{
+	if (!pSerial)
+		return;
+	
+	char buffer[64];
+	int nRead = pSerial->Read(buffer, sizeof(buffer) - 1);
+	
+	if (nRead > 0)
+	{
+		m_FudiParser.ProcessBuffer(buffer, nRead);
+	}
+}
+
+void CKernel::FudiOutputHandler (const char *pMessage)
+{
+	if (!s_pThis || !pMessage)
+		return;
+	
+	// Send FUDI output to UART serial (GPIO 14/15)
+	unsigned nLen = strlen(pMessage);
+	s_pThis->m_Serial.Write(pMessage, nLen);
+}
+
+// Pd hooks for FUDI output - these forward [send] messages to serial
+
+void CKernel::PdFloatHook (const char *recv, float x)
+{
+	if (s_pThis && s_pThis->m_bFudiEnabled)
+	{
+		s_pThis->m_FudiParser.SendFloat(recv, x);
+	}
+}
+
+void CKernel::PdBangHook (const char *recv)
+{
+	if (s_pThis && s_pThis->m_bFudiEnabled)
+	{
+		s_pThis->m_FudiParser.SendBang(recv);
+	}
+}
+
+void CKernel::PdSymbolHook (const char *recv, const char *sym)
+{
+	if (s_pThis && s_pThis->m_bFudiEnabled)
+	{
+		s_pThis->m_FudiParser.SendSymbol(recv, sym);
 	}
 }

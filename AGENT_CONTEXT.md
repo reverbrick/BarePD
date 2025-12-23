@@ -1,6 +1,6 @@
 # BarePD Agent Context
 
-> **Last Updated:** 2024-12-23 (headless mode, low latency optimized)
+> **Last Updated:** 2024-12-23 (FUDI remote control, headless mode, low latency)
 > **Purpose:** Quick context recovery for AI agents working on this project
 
 ## Project Overview
@@ -37,6 +37,11 @@ BarePD is a **bare metal Pure Data implementation** for Raspberry Pi using the C
 3. **Headless mode** - `headless=1` in cmdline.txt disables video
 4. **Fast boot** - `disable_splash=1` removes rainbow screen
 5. **Removed all logging in audio loop** - No stuttering from debug output
+6. **FUDI remote control** - Control patches via USB CDC or UART serial
+   - USB: Pi appears as /dev/ttyACM0 on host
+   - UART: GPIO 14/15 at 115200 baud
+   - Bidirectional: Pd [s name] sends back to serial
+   - Files: pd_fudi.h/cpp, uses CUSBCDCGadget
 
 ## I2S Audio Parameters (Low Latency)
 
