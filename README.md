@@ -6,18 +6,20 @@
 
 BarePD runs [Pure Data](https://puredata.info/) patches directly on Raspberry Pi hardware without any operating system. This enables ultra-low latency audio synthesis with deterministic timing - perfect for embedded musical instruments, synthesizers, and audio installations.
 
-> **Status:** Tested and working on Raspberry Pi 3B+ with PWM audio output (3.5mm jack). Patches load from SD card and play!
+> **Status:** Tested and working on Raspberry Pi 3B+ with I2S audio (PCM5102A DAC) and PWM (3.5mm jack). ~50ms audio latency achieved!
 
 ## Features
 
 - 🎵 **libpd Integration** - Full Pure Data audio engine running bare metal
-- ⚡ **Ultra-Low Latency** - No OS overhead, direct hardware access
+- ⚡ **Ultra-Low Latency** - ~50ms with optimized settings, no OS overhead
 - 🎹 **USB MIDI Support** - Connect any class-compliant USB MIDI controller
 - 💾 **SD Card Patches** - Load `.pd` patches directly from FAT32 SD card
 - 🔊 **Multiple Audio Outputs**:
+  - **I2S** - External DACs like PCM5102A (recommended!)
   - **PWM** - Built-in 3.5mm headphone jack
-  - **I2S** - External DACs like PCM5102A (high quality!)
   - **USB Audio** - USB audio interfaces (planned)
+- 🚀 **Fast Boot** - Under 3 seconds to audio with optimized config
+- 👁️ **Headless Mode** - Disable video for maximum performance
 - 🖥️ **Serial Console** - Debug output via UART
 
 ## Supported Hardware
@@ -43,22 +45,10 @@ SD Card Root/
 ├── start.elf         # From Raspberry Pi firmware  
 ├── fixup.dat         # From Raspberry Pi firmware
 ├── config.txt        # BarePD configuration
-├── cmdline.txt       # Audio settings (optional)
+├── cmdline.txt       # Audio settings
 ├── kernel8-32.img    # BarePD kernel
-│
-├── main.pd           # Simple patch (optional, root location)
-│
-└── pd/               # Recommended: dedicated patch folder
-    ├── main.pd       # Main patch (loaded first if present)
-    ├── lfo.pd        # Abstractions used by main.pd
-    ├── sample.wav    # Audio samples
-    └── ...           # Other patches and files
+└── main.pd           # Your Pure Data patch
 ```
-
-**Patch Loading Order:**
-1. `pd/main.pd` (recommended location)
-2. `main.pd` (root directory)
-3. Any `.pd` file found in root
 
 Get the firmware files from: https://github.com/raspberrypi/firmware/tree/master/boot
 
@@ -82,18 +72,9 @@ Insert the SD card into your Raspberry Pi and power on. Audio will start playing
 
 ## Audio Output Options
 
-### PWM (Default) - 3.5mm Jack
+### I2S DAC - PCM5102A (Recommended)
 
-Uses the built-in headphone jack. Good for testing, but lower quality.
-
-**cmdline.txt:**
-```
-audio=pwm samplerate=48000
-```
-
-### I2S DAC - PCM5102A
-
-The popular PCM5102A module provides high-quality audio output. No driver configuration needed!
+The PCM5102A module provides high-quality, low-latency audio output.
 
 **Wiring:**
 
@@ -107,23 +88,101 @@ The popular PCM5102A module provides high-quality audio output. No driver config
 | FMT      | GND (I2S mode) |
 | XSMT     | 3.3V (unmute) |
 
-**config.txt:**
-```ini
-dtparam=i2s=on
-```
-
 **cmdline.txt:**
 ```
 audio=i2s samplerate=48000
 ```
 
-### USB Audio Interface (Planned)
+**config.txt:**
+```ini
+dtparam=i2s=on
+```
 
-USB audio interface support is planned for a future release.
+### PWM - 3.5mm Jack
 
-**Notes:**
-- Will support class-compliant USB audio devices
-- Multichannel output planned (up to 8 channels)
+Uses the built-in headphone jack. Lower quality but no extra hardware needed.
+
+**cmdline.txt:**
+```
+audio=pwm samplerate=48000
+```
+
+## Performance Optimization
+
+### Headless Mode (Recommended)
+
+Disable video output to free resources for audio processing:
+
+**cmdline.txt:**
+```
+audio=i2s samplerate=48000 headless=1
+```
+
+In headless mode:
+- Video is completely disabled
+- Logging goes to serial console only
+- More CPU/memory available for audio
+- Connect USB-serial adapter to see boot messages
+
+### Fast Boot
+
+Add these to `config.txt` for faster startup:
+
+```ini
+disable_splash=1          # Remove rainbow screen
+boot_delay=0              # No boot delay  
+initial_turbo=1           # CPU turbo during boot
+```
+
+### Low Latency Audio
+
+Current optimized settings (~50ms latency):
+- I2S queue: 50ms buffer
+- Chunk size: 256 frames (~5ms)
+- No logging during audio processing
+
+## Configuration Reference
+
+### cmdline.txt Options
+
+| Option | Values | Default | Description |
+|--------|--------|---------|-------------|
+| `audio` | `i2s`, `pwm` | `i2s` | Audio output type |
+| `samplerate` | `44100`, `48000`, `96000` | `48000` | Sample rate in Hz |
+| `headless` | `0`, `1` | `0` | Disable video output |
+
+### config.txt Options
+
+```ini
+# Required settings
+arm_64bit=0
+kernel=kernel8-32.img
+
+# Audio
+dtparam=audio=on
+dtparam=i2s=on            # For I2S DAC
+
+# Performance
+disable_splash=1          # Fast boot
+boot_delay=0
+initial_turbo=1
+gpu_mem=64
+
+# Display
+disable_overscan=1
+```
+
+### Serial Console
+
+Connect a USB-to-serial adapter for debug output (required in headless mode):
+
+| Pi GPIO | Serial Adapter |
+|---------|----------------|
+| GPIO 14 (TXD) | RX |
+| GPIO 15 (RXD) | TX |
+| GND | GND |
+
+Baud rate: **115200**
 
 ## Building from Source
 
@@ -150,8 +209,6 @@ tar -xf arm-toolchain.tar.xz
 
 ### Configure and Build
 
-#### For Raspberry Pi 3B/3B+ (recommended)
-
 ```bash
 # Configure Circle for RPi 3B
 cd circle
@@ -171,82 +228,20 @@ make
 
 Output: `src/kernel8-32.img`
 
-#### For Raspberry Pi Zero W
-
-```bash
-# Configure Circle for RPi Zero W (RASPPI=1)
-cd circle
-./configure -r 1 -p ../arm-gnu-toolchain-13.2.Rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-
-
-# Add stdlib support
-echo "STDLIB_SUPPORT = 3" >> Config.mk
-
-# Build Circle libraries
-./makeall
-cd addon/SDCard && make && cd ../..
-
-# Build BarePD
-cd ../src
-make
-```
-
-Output: `src/kernel.img`
-
-**Note:** Zero W is single-core and slower than RPi 3B. Complex patches may have higher CPU usage.
-
-## Configuration Reference
-
-### cmdline.txt Options
-
-| Option | Values | Description |
-|--------|--------|-------------|
-| `audio` | `pwm`, `i2s` | Audio output type |
-| `samplerate` | `44100`, `48000`, `96000` | Sample rate in Hz |
-
-### config.txt Options
-
-```ini
-# Required settings
-arm_64bit=0
-dtparam=audio=on
-
-# Kernel selection (choose one based on your Pi model):
-kernel=kernel8-32.img    # For RPi 3B/3B+, Zero 2 W
-# kernel=kernel.img      # For RPi Zero W
-
-# For I2S DAC (PCM5102A)
-dtparam=i2s=on
-
-# Memory allocation
-gpu_mem=64
-```
-
-### Serial Console
-
-Connect a USB-to-serial adapter for debug output:
-
-| Pi GPIO | Serial Adapter |
-|---------|----------------|
-| GPIO 14 (TXD) | RX |
-| GPIO 15 (RXD) | TX |
-| GND | GND |
-
-Baud rate: **115200**
-
 ## Pure Data Patch Guidelines
 
 ### Supported Objects
 
 Most core Pd objects work, including:
-- Audio: `osc~`, `phasor~`, `noise~`, `+~`, `*~`, `dac~`, etc.
-- Control: `metro`, `counter`, `random`, `select`, etc.
+- Audio: `osc~`, `phasor~`, `noise~`, `+~`, `*~`, `dac~`, `tabplay~`, `tabread4~`
+- Control: `metro`, `counter`, `random`, `select`, `loadbang`
 - MIDI: `notein`, `ctlin`, `pgmin`, `bendin`
 - Math: `+`, `-`, `*`, `/`, `sin`, `cos`, etc.
-- Arrays and tables
+- Arrays: `table`, `soundfiler` (for sample playback)
 
 ### MIDI Input
 
-MIDI messages from USB are automatically routed to Pd. Use standard MIDI objects:
+MIDI messages from USB are automatically routed to Pd:
 
 ```
 [notein]       - Note messages (note, velocity, channel)
@@ -255,10 +250,23 @@ MIDI messages from USB are automatically routed to Pd. Use standard MIDI objects
 [bendin]       - Pitch bend
 ```
 
+### Sample Playback
+
+Load WAV files with `soundfiler`:
+
+```
+[loadbang]
+|
+[read -resize sample.wav array1]
+|
+[soundfiler]
+```
+
 ### Limitations
 
 - No GUI objects (running headless)
-- No file I/O beyond patch loading
+- Root directory only (no subdirectories on SD card)
+- Max patch size: 256KB
 - No networking objects
 - No external libraries (yet)
 
@@ -270,7 +278,7 @@ MIDI messages from USB are automatically routed to Pd. Use standard MIDI objects
 ├─────────────────────────────────────────────────────┤
 │  ┌─────────┐  ┌─────────┐  ┌──────────────────────┐ │
 │  │  libpd  │  │  USB    │  │   Audio Output       │ │
-│  │  (Pd    │◄─│  MIDI   │  │  (PWM/I2S/USB)       │ │
+│  │  (Pd    │◄─│  MIDI   │  │  (I2S/PWM)           │ │
 │  │  Core)  │  │  Input  │  └──────────────────────┘ │
 │  └────┬────┘  └─────────┘           ▲               │
 │       │                             │               │
@@ -290,17 +298,15 @@ BarePD/
 ├── src/                    # BarePD source code
 │   ├── kernel.cpp          # Main kernel implementation
 │   ├── kernel.h            # Kernel header
-│   ├── pdsounddevice.cpp   # Audio drivers (PWM/I2S/USB)
-│   ├── pdsounddevice.h     # Sound device header
-│   ├── pd_compat.c         # OS compatibility layer
+│   ├── pdsounddevice.cpp   # Audio drivers (PWM/I2S)
+│   ├── pdsounddevice.h     # Sound device classes
+│   ├── pd_fileio.cpp       # File I/O bridge for libpd
+│   ├── pd_compat.c         # POSIX compatibility layer
 │   ├── main.cpp            # Entry point
 │   └── Makefile            # Build configuration
 ├── circle/                 # Circle bare metal framework (submodule)
 ├── libpd/                  # libpd library (submodule)
 ├── sdcard/                 # SD card template files
-│   ├── config.txt          # Pi configuration
-│   ├── cmdline.txt         # Audio settings
-│   └── README.md           # SD card setup guide
 ├── patches/                # Example Pure Data patches
 └── README.md               # This file
 ```
@@ -309,12 +315,18 @@ BarePD/
 
 ### No Audio Output
 
-1. Check that `main.pd` exists on SD card
+1. Check that `main.pd` exists on SD card root
 2. Verify patch has `dac~` object connected
 3. Try a simple test patch (sine wave)
 4. Check serial console for error messages
 5. For I2S: verify wiring and config.txt settings
-6. For USB: ensure device is plugged in
+
+### Audio Stuttering
+
+1. Enable headless mode: `headless=1` in cmdline.txt
+2. Use I2S instead of PWM for better performance
+3. Simplify your patch if CPU usage is too high
+4. Check serial output for errors
 
 ### I2S (PCM5102A) Not Working
 
@@ -324,10 +336,15 @@ BarePD/
 4. Connect XSMT to 3.3V to unmute
 5. Connect FMT to GND for I2S mode
 
+### Won't Boot (LED Blinks)
+
+- **4 blinks**: `start.elf` issue - check `gpu_mem` is at least 64
+- **7 blinks**: `kernel*.img` not found - check filename matches config.txt
+
 ### Patch Not Loading
 
-1. Ensure filename is `main.pd` (or any `.pd` file)
-2. File must be in root of SD card
+1. Ensure filename is `main.pd`
+2. File must be in root of SD card (not subdirectory)
 3. Check patch size is under 256KB
 4. Verify patch syntax in desktop Pd first
 
@@ -355,5 +372,5 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Related Projects
 
-- [mt32-pi](https://github.com/dwhinham/mt32-pi) - Bare metal MT-32 emulator (inspiration)
+- [mt32-pi](https://github.com/dwhinham/mt32-pi) - Bare metal MT-32 emulator
 - [MiniSynth Pi](https://github.com/rsta2/minisynth) - Circle-based synthesizer

@@ -11,20 +11,23 @@ kernel=kernel8-32.img
 # Enable audio
 dtparam=audio=on
 
-# Initial turbo for faster boot
-initial_turbo=1
+# ============================================
+# Fast Boot Options
+# ============================================
+disable_splash=1          # Remove rainbow screen
+boot_delay=0              # No boot delay
+initial_turbo=1           # CPU turbo during boot
 
-# Disable overscan
+# Disable unused features
 disable_overscan=1
 
-# GPU memory (more for CPU/audio processing)
+# GPU memory (16 is too low, 64 is safe minimum)
 gpu_mem=64
 
 # ============================================
 # I2S DAC Configuration (PCM5102A)
 # ============================================
-# Uncomment these lines to use I2S output:
-#dtparam=i2s=on
+dtparam=i2s=on
 
 # PCM5102A GPIO connections:
 #   BCK  -> GPIO 18 (Pin 12) - Bit clock

@@ -29,17 +29,12 @@
 
 #include "pdsounddevice.h"
 
-// Default patch paths (tried in order)
-#define PATCH_DIR               "pd"
+// Default patch filename
 #define DEFAULT_PATCH_NAME      "main.pd"
 #define MAX_PATCH_SIZE          (256 * 1024) // 256KB max patch size
 
-// Log file settings
-#define LOG_FILE_NAME           "barepd.log"
-#define LOG_BUFFER_SIZE         (64 * 1024)  // 64KB log buffer
-
 // Default audio settings
-#define DEFAULT_AUDIO_OUTPUT    AudioOutputPWM
+#define DEFAULT_AUDIO_OUTPUT    AudioOutputI2S
 #define DEFAULT_SAMPLE_RATE_HZ  48000
 
 enum TShutdownMode
@@ -69,9 +64,6 @@ private:
 
 	// Audio setup
 	boolean SetupAudio (void);
-	
-	// SD card logging
-	void WriteLogToSD (void);
 
 	// MIDI handlers
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength);
@@ -101,9 +93,11 @@ private:
 	// Audio configuration
 	TAudioOutputType	m_AudioOutput;
 	unsigned		m_nSampleRate;
+	boolean			m_bHeadless;		// Skip video for lower latency
 	
-	// Sound device (generic pointer, actual type depends on config)
-	CSoundBaseDevice	*m_pSoundDevice;
+	// Sound devices
+	CSoundBaseDevice	*m_pSoundDevice;	// For PWM output
+	CPdSoundI2S		*m_pI2SDevice;		// For I2S output (PCM5102A)
 
 	// USB MIDI
 	CUSBMIDIDevice		*m_pMIDIDevice;

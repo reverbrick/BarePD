@@ -1,2 +1,2 @@
-audio=pwm samplerate=48000
+audio=i2s samplerate=48000 headless=1
 

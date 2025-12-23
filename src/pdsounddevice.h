@@ -60,35 +60,41 @@ private:
 
 //
 // I2S Sound Device (PCM5102A and other I2S DACs)
+// Uses queue-based API instead of GetChunk override for compatibility
 //
-class CPdSoundI2S : public CI2SSoundBaseDevice
+class CPdSoundI2S
 {
 public:
-	/// \param pInterrupt    Interrupt system
-	/// \param pI2CMaster    I2C master (optional, for DACs with I2C control)
-	/// \param ucI2CAddress  I2C address (0 = no I2C control, for PCM5102A)
-	/// \param nSampleRate   Sample rate in Hz
-	/// \param nChunkSize    Buffer size in frames
 	CPdSoundI2S (CInterruptSystem *pInterrupt,
-	             CI2CMaster *pI2CMaster = nullptr,
-	             u8 ucI2CAddress = 0,
-	             unsigned nSampleRate = DEFAULT_SAMPLE_RATE,
-	             unsigned nChunkSize = DEFAULT_CHUNK_SIZE);
+	             CI2CMaster *pI2CMaster,
+	             unsigned nSampleRate = DEFAULT_SAMPLE_RATE);
 	~CPdSoundI2S (void);
 
 	boolean Initialize (void);
+	boolean Start (void);
+	void Cancel (void);
+	boolean IsActive (void) const;
+	
 	unsigned GetOutputChannels (void) const { return m_nOutChannels; }
-
-protected:
-	// I2S uses 32-bit samples (u32)
-	unsigned GetChunk (u32 *pBuffer, unsigned nChunkSize) override;
+	
+	// Call this periodically from main loop to feed audio
+	void Process (void);
 
 private:
+	void FillQueue (unsigned nFrames);
+
+	CI2SSoundBaseDevice *m_pDevice;
+	CInterruptSystem *m_pInterrupt;
+	CI2CMaster *m_pI2CMaster;
+	
 	float *m_pInBuffer;
 	float *m_pOutBuffer;
+	s16 *m_pWriteBuffer;
+	
 	unsigned m_nInChannels;
 	unsigned m_nOutChannels;
 	unsigned m_nSampleRate;
+	unsigned m_nChunkSize;
 };
 
 //

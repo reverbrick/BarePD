@@ -38,6 +38,9 @@ struct FileEntry {
 };
 
 static CFATFileSystem *s_pFileSystem = nullptr;
+
+// Global accessor for other modules
+CFATFileSystem *g_pFileSystem = nullptr;
 static FileEntry s_FileTable[MAX_OPEN_FILES];
 
 // Helper: normalize path - strip leading "./" or "/" but keep subfolders
@@ -102,6 +105,7 @@ extern "C" {
 void pd_fileio_init(void *pFileSystem)
 {
     s_pFileSystem = static_cast<CFATFileSystem*>(pFileSystem);
+    g_pFileSystem = s_pFileSystem;  // Set global accessor
     
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         s_FileTable[i].hFile = 0;
