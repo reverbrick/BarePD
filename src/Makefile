@@ -112,7 +112,7 @@ INCLUDE += \
 # C/C++ flags for libpd
 # -fno-short-enums: Force enums to be int-sized (required for variadic functions)
 #                   ARM EABI defaults to short enums, but variadic args expect int
-# -mthumb/-mthumb-interwork: Match newlib's Thumb compilation
+# -mthumb/-mthumb-interwork: Match newlib's Thumb compilation (Pi 3/Zero 2 W)
 CFLAGS_LIBPD = \
 	-DPD \
 	-DUSEAPI_DUMMY \

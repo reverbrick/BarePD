@@ -93,7 +93,7 @@ private:
 	CLogger			m_Logger;
 	CScheduler		m_Scheduler;
 
-	// USB and I2C
+	// USB Host for MIDI devices
 	CUSBHCIDevice		m_USBHCI;
 	CI2CMaster		m_I2CMaster;
 
@@ -113,10 +113,9 @@ private:
 	// USB MIDI
 	CUSBMIDIDevice		*m_pMIDIDevice;
 
-	// FUDI remote control (via UART serial - GPIO 14/15)
-	// Note: USB CDC Gadget not available on Pi 3B (no OTG support)
-	CFudiParser		m_FudiParser;		// FUDI protocol parser
-	boolean			m_bFudiEnabled;		// FUDI over serial enabled
+	// FUDI remote control via UART serial (GPIO 14/15, 115200 baud)
+	CFudiParser		m_FudiParser;
+	boolean			m_bFudiEnabled;
 
 	// Loaded patch handle
 	void			*m_pPatch;

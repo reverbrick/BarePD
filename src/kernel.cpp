@@ -135,7 +135,7 @@ void CKernel::ParseConfig (void)
 	
 	if (m_bFudiEnabled)
 	{
-		m_Logger.Write (FromKernel, LogNotice, "FUDI remote control: enabled (USB + UART)");
+		m_Logger.Write (FromKernel, LogNotice, "FUDI: enabled (UART GPIO 14/15, 115200 baud)");
 	}
 }
 
@@ -434,7 +434,7 @@ TShutdownMode CKernel::Run (void)
 			ProcessFudi();
 		}
 		
-		// Check for MIDI device (only when USB state changes)
+		// Check for USB MIDI device
 		if (m_pMIDIDevice == nullptr)
 		{
 			if (m_USBHCI.UpdatePlugAndPlay())
@@ -513,8 +513,7 @@ void CKernel::USBDeviceRemovedHandler (CDevice *pDevice, void *pContext)
 
 void CKernel::ProcessFudi (void)
 {
-	// Note: USB CDC Gadget disabled on Pi 3B (no OTG support)
-	// FUDI commands are received via UART serial (GPIO 14/15)
+	// Process FUDI from UART serial (GPIO 14/15, 115200 baud)
 	ProcessFudiSerial(&m_Serial);
 }
 
@@ -538,7 +537,7 @@ void CKernel::FudiOutputHandler (const char *pMessage)
 	if (!s_pThis || !pMessage)
 		return;
 	
-	// Send FUDI output to serial
+	// Send FUDI output to UART serial
 	s_pThis->m_Serial.Write(pMessage, strlen(pMessage));
 }
 
