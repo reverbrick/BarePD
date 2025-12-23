@@ -184,50 +184,61 @@ boolean CKernel::SetupAudio (void)
 	return bOK;
 }
 
-boolean CKernel::LoadPatch (const char *pPatchName)
+boolean CKernel::LoadPatch (const char *pPatchPath)
 {
-	m_Logger.Write (FromKernel, LogNotice, "Loading patch: %s", pPatchName);
+	m_Logger.Write (FromKernel, LogNotice, "Loading patch: %s", pPatchPath);
 	LogToBuffer(FromKernel, "Loading patch...");
 
 	// libpd expects filename and directory separately
-	const char *pDirectory = ".";
+	// Parse path to extract directory and filename
+	char szDirectory[256] = ".";
+	const char *pFilename = pPatchPath;
 	
-	// Find the filename part (after last '/')
-	const char *pFilename = pPatchName;
-	const char *pSlash = pPatchName;
-	while (*pSlash)
-	{
-		if (*pSlash == '/')
-			pFilename = pSlash + 1;
-		pSlash++;
+	// Find the last '/' to split directory and filename
+	const char *pLastSlash = nullptr;
+	for (const char *p = pPatchPath; *p; p++) {
+		if (*p == '/') pLastSlash = p;
+	}
+	
+	if (pLastSlash) {
+		// Copy directory part
+		unsigned nDirLen = pLastSlash - pPatchPath;
+		if (nDirLen >= sizeof(szDirectory)) nDirLen = sizeof(szDirectory) - 1;
+		memcpy(szDirectory, pPatchPath, nDirLen);
+		szDirectory[nDirLen] = '\0';
+		pFilename = pLastSlash + 1;
 	}
 
-	m_Logger.Write (FromKernel, LogDebug, "Opening patch: dir='%s' file='%s'", pDirectory, pFilename);
+	m_Logger.Write (FromKernel, LogDebug, "Opening patch: dir='%s' file='%s'", szDirectory, pFilename);
 	
-	// Open the patch in libpd (this will use newlib fopen -> _open)
-	m_pPatch = libpd_openfile (pFilename, pDirectory);
+	// Open the patch in libpd
+	m_pPatch = libpd_openfile (pFilename, szDirectory);
 	
 	if (m_pPatch == nullptr)
 	{
-		m_Logger.Write (FromKernel, LogError, "libpd failed to open patch: %s", pPatchName);
+		m_Logger.Write (FromKernel, LogError, "libpd failed to open patch: %s", pPatchPath);
 		LogToBuffer(FromKernel, "ERROR: libpd_openfile failed");
 		return FALSE;
 	}
 
-	m_Logger.Write (FromKernel, LogNotice, "Patch loaded successfully: %s", pPatchName);
+	m_Logger.Write (FromKernel, LogNotice, "Patch loaded successfully: %s", pPatchPath);
 	return TRUE;
 }
 
 boolean CKernel::FindAndLoadPatch (void)
 {
-	// Try to load the default patch first
+	// Note: Circle's FAT filesystem only supports root directory
+	// Subdirectories are not supported
+	
+	// Try main.pd first
+	m_Logger.Write (FromKernel, LogNotice, "Trying: %s", DEFAULT_PATCH_NAME);
 	if (LoadPatch (DEFAULT_PATCH_NAME))
 	{
 		return TRUE;
 	}
 
 	// Look for any .pd file in the root directory
-	m_Logger.Write (FromKernel, LogNotice, "Searching for .pd files...");
+	m_Logger.Write (FromKernel, LogNotice, "Searching for .pd files in root...");
 
 	TDirentry entry;
 	TFindCurrentEntry currentEntry;
@@ -243,7 +254,7 @@ boolean CKernel::FindAndLoadPatch (void)
 
 			if (nLen > 3)
 			{
-				// Check for .pd extension
+				// Check for .pd extension (case insensitive)
 				if (pName[nLen-3] == '.' && 
 				    (pName[nLen-2] == 'p' || pName[nLen-2] == 'P') &&
 				    (pName[nLen-1] == 'd' || pName[nLen-1] == 'D'))
@@ -260,6 +271,7 @@ boolean CKernel::FindAndLoadPatch (void)
 	}
 
 	m_Logger.Write (FromKernel, LogWarning, "No .pd patch files found on SD card");
+	m_Logger.Write (FromKernel, LogWarning, "Place 'main.pd' in /pd/ folder or SD root");
 	return FALSE;
 }
 

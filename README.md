@@ -45,8 +45,20 @@ SD Card Root/
 ├── config.txt        # BarePD configuration
 ├── cmdline.txt       # Audio settings (optional)
 ├── kernel8-32.img    # BarePD kernel
-└── main.pd           # Your Pure Data patch
+│
+├── main.pd           # Simple patch (optional, root location)
+│
+└── pd/               # Recommended: dedicated patch folder
+    ├── main.pd       # Main patch (loaded first if present)
+    ├── lfo.pd        # Abstractions used by main.pd
+    ├── sample.wav    # Audio samples
+    └── ...           # Other patches and files
 ```
+
+**Patch Loading Order:**
+1. `pd/main.pd` (recommended location)
+2. `main.pd` (root directory)
+3. Any `.pd` file found in root
 
 Get the firmware files from: https://github.com/raspberrypi/firmware/tree/master/boot
 

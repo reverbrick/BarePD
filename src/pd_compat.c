@@ -280,7 +280,7 @@ int addrinfo_ipv4_first(const void* ai1, const void* ai2) {
 /* Pure Data optional components - stub setup functions */
 void x_net_setup(void) { }
 void x_file_setup(void) { }
-void d_soundfile_setup(void) { }
+/* d_soundfile_setup is now provided by d_soundfile.c */
 
 /* _open - open a file using Circle's filesystem */
 int _open(const char *path, int flags, ...) {

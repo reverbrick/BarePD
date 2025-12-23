@@ -36,6 +36,11 @@ PD_CORE_OBJS = \
 	pd_d_misc.o \
 	pd_d_osc.o \
 	pd_d_resample.o \
+	pd_d_soundfile.o \
+	pd_d_soundfile_aiff.o \
+	pd_d_soundfile_caf.o \
+	pd_d_soundfile_next.o \
+	pd_d_soundfile_wave.o \
 	pd_d_ugen.o \
 	pd_g_all_guis.o \
 	pd_g_array.o \

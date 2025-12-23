@@ -29,7 +29,8 @@
 
 #include "pdsounddevice.h"
 
-// Default patch filename
+// Default patch paths (tried in order)
+#define PATCH_DIR               "pd"
 #define DEFAULT_PATCH_NAME      "main.pd"
 #define MAX_PATCH_SIZE          (256 * 1024) // 256KB max patch size
 
